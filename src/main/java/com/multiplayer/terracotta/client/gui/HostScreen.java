@@ -24,6 +24,7 @@ public class HostScreen extends TerracottaBaseScreen {
     private boolean keepConnection = false;
     private Button startBtn;
     private long lastStateCheck = 0;
+    private long lastClickTime = 0;
     private static final Gson GSON = new Gson();
 
     /**
@@ -58,6 +59,9 @@ public class HostScreen extends TerracottaBaseScreen {
      * 发送 HTTP 请求并处理响应
      */
     private void startHosting() {
+        long now = System.currentTimeMillis();
+        if (now - lastClickTime < 300) return;
+        lastClickTime = now;
         if (isWorking) return;
         isWorking = true;
         statusText = Component.translatable("terracotta.host.status.requesting");
@@ -132,9 +136,6 @@ public class HostScreen extends TerracottaBaseScreen {
 
     @Override
     public void onClose() {
-        // If we are hosting, maybe we should stop hosting when leaving? 
-        // Or keep it running in background?
-        // User said "Cancel state when clicking back: GET /state/ide"
         if (isWorking && !keepConnection) {
             TerracottaApiClient.setIdle();
         }

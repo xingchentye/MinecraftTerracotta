@@ -6,7 +6,6 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.multiplayer.terracotta.client.gui.RoomSettingsScreen;
 import com.multiplayer.terracotta.client.gui.StartupScreen;
-import com.multiplayer.terracotta.logic.ProcessLauncher;
 import com.multiplayer.terracotta.network.TerracottaApiClient;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
@@ -27,18 +26,18 @@ public class InGameMenuHandler {
     private static final Gson GSON = new Gson();
     private static boolean showInfoOverlay = false;
     private static JsonObject lastState = null;
+    private static long lastCreateClickTime = 0;
 
     @SubscribeEvent
     public static void onScreenInit(ScreenEvent.Init.Post event) {
         if (event.getScreen() instanceof PauseScreen screen) {
-            // 在右上角添加陶瓦联机按钮
             int width = screen.width;
             int height = screen.height;
             int buttonWidth = 100;
             int x = width - buttonWidth - 5;
             int y = 5;
 
-            // 1. 房间信息按钮
+            // 房间信息按钮
             Button infoBtn = Button.builder(Component.literal(showInfoOverlay ? "隐藏信息" : "显示信息"), button -> {
                 showInfoOverlay = !showInfoOverlay;
                 button.setMessage(Component.literal(showInfoOverlay ? "隐藏信息" : "显示信息"));
@@ -46,7 +45,7 @@ public class InGameMenuHandler {
             infoBtn.visible = false;
             event.addListener(infoBtn);
 
-            // 2. 房间设置按钮 (逻辑更新：根据角色打开不同页面)
+            // 房间设置按钮
             Button settingsBtn = Button.builder(Component.literal("房间设置"), button -> {
                 if ("房间信息".equals(button.getMessage().getString())) {
                     Minecraft.getInstance().setScreen(new com.multiplayer.terracotta.client.gui.TerracottaDashboard(screen));
@@ -57,8 +56,13 @@ public class InGameMenuHandler {
             settingsBtn.visible = false;
             event.addListener(settingsBtn);
 
-            // 3. 创建房间按钮
+            // 创建房间按钮
             Button createRoomBtn = Button.builder(Component.literal("创建房间"), button -> {
+                long now = System.currentTimeMillis();
+                if (now - lastCreateClickTime < 300) {
+                    return;
+                }
+                lastCreateClickTime = now;
                 if (!TerracottaApiClient.hasDynamicPort()) {
                      Minecraft.getInstance().setScreen(new StartupScreen(screen, () -> {
                          Minecraft.getInstance().setScreen(screen);
@@ -128,7 +132,7 @@ public class InGameMenuHandler {
             
             int currentY = startY;
             
-            guiGraphics.drawString(font, Component.literal("=== 房间信息 ===").withStyle(ChatFormatting.BOLD), startX, currentY, 0xFFFFFF);
+            guiGraphics.drawString(font, Component.literal(" 房间信息 ").withStyle(ChatFormatting.BOLD), startX, currentY, 0xFFFFFF);
             currentY += lineHeight;
             
             String roomCode = lastState.has("room") ? lastState.get("room").getAsString() : "未知";

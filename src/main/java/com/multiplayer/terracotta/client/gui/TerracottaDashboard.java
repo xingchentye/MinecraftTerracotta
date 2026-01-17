@@ -4,7 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.multiplayer.terracotta.logic.ProcessLauncher;
+import com.multiplayer.terracotta.client.ClientSetup;
 import com.multiplayer.terracotta.network.TerracottaApiClient;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.layouts.LinearLayout;
@@ -42,13 +42,13 @@ public class TerracottaDashboard extends TerracottaBaseScreen {
     /** 上次获取的状态 JSON 数据 */
     private static JsonObject lastStateJson = null;
 
-    // --- 视图状态 ---
+    //  视图状态 
     /** 是否显示玩家列表 */
     private boolean showPlayerList = false;
     /** 是否显示服务端高级设置 */
     private boolean showServerSettings = false;
 
-    // --- 设置临时变量 ---
+    //  设置临时变量 
     private String tempPath;
     private boolean tempAutoUpdate;
     private boolean tempAutoStart;
@@ -202,28 +202,32 @@ public class TerracottaDashboard extends TerracottaBaseScreen {
              return;
         }
         
-        // 房主视图: 完整的控制面板
-        // 主容器: 水平布局
+        // 房主视图: 控制面板
         LinearLayout mainLayout = LinearLayout.horizontal().spacing(20);
         
-        // --- 左侧面板: 房间信息 ---
         if (currentMode == ViewMode.FULL || currentMode == ViewMode.INGAME_INFO) {
             LinearLayout leftPanel = LinearLayout.vertical().spacing(10);
             leftPanel.defaultCellSetting().alignHorizontallyCenter();
             
-            // 标题
-            leftPanel.addChild(new StringWidget(Component.literal("=== 房间信息 ==="), this.font));
+            leftPanel.addChild(new StringWidget(Component.literal(" 房间信息 "), this.font));
 
             // 房间号显示与复制按钮
             String roomCode = "未知";
             if (lastStateJson != null && lastStateJson.has("room")) {
                 roomCode = lastStateJson.get("room").getAsString();
             }
-            leftPanel.addChild(Button.builder(Component.literal("复制房间号: " + roomCode), button -> {
-                this.minecraft.keyboardHandler.setClipboard(button.getMessage().getString().replace("复制房间号: ", ""));
+            String finalRoomCode = roomCode;
+            leftPanel.addChild(new StringWidget(Component.literal("房间号: " + finalRoomCode), this.font));
+            leftPanel.addChild(Button.builder(Component.literal("复制房间号"), button -> {
+                try {
+                    this.minecraft.keyboardHandler.setClipboard(finalRoomCode);
+                    ClientSetup.showToast(Component.literal("提示"), Component.literal("房间号已复制"));
+                } catch (Exception e) {
+                    ClientSetup.showToast(Component.literal("提示"), Component.literal("复制失败，请手动复制房间号"));
+                }
             }).width(180).build());
 
-            // 玩家列表 (房主视图下控制显示)
+            // 玩家列表
             boolean shouldShowPlayers = (currentMode == ViewMode.INGAME_INFO) || (showPlayerList);
             
             if (shouldShowPlayers) {
@@ -233,17 +237,17 @@ public class TerracottaDashboard extends TerracottaBaseScreen {
             mainLayout.addChild(leftPanel);
         }
 
-        // --- 右侧面板: 设置 ---
+        //  右侧面板: 设置 
         if (currentMode == ViewMode.FULL || currentMode == ViewMode.INGAME_SETTINGS) {
             LinearLayout rightPanel = LinearLayout.vertical().spacing(10);
             rightPanel.defaultCellSetting().alignHorizontallyCenter();
 
             // 标题
-            rightPanel.addChild(new StringWidget(Component.literal("=== 房间设置 ==="), this.font));
+            rightPanel.addChild(new StringWidget(Component.literal(" 房间设置 "), this.font));
 
-            // 1. 核心设置 (仅在完整模式显示)
+            // 核心设置
             if (currentMode == ViewMode.FULL) {
-                rightPanel.addChild(new StringWidget(Component.literal("--- 核心设置 ---"), this.font));
+                rightPanel.addChild(new StringWidget(Component.literal(" 核心设置 "), this.font));
                 
                 // 路径输入框
                 EditBox pathBox = new EditBox(this.font, 0, 0, 180, 20, Component.literal("Path"));
@@ -271,9 +275,9 @@ public class TerracottaDashboard extends TerracottaBaseScreen {
                 }).width(180).build());
             }
 
-            // 2. 房主管理设置 (仅房主可见)
+            // 房主管理设置 (仅房主可见)
             if (isHost) {
-                rightPanel.addChild(new StringWidget(Component.literal("--- 房主管理 ---"), this.font));
+                rightPanel.addChild(new StringWidget(Component.literal(" 房主管理 "), this.font));
 
                 // 房间信息显示切换
                 if (currentMode == ViewMode.FULL) {
@@ -357,7 +361,7 @@ public class TerracottaDashboard extends TerracottaBaseScreen {
         LinearLayout content = LinearLayout.vertical().spacing(10);
         content.defaultCellSetting().alignHorizontallyCenter();
         
-        content.addChild(new StringWidget(Component.literal("=== 房间玩家列表 ==="), this.font));
+        content.addChild(new StringWidget(Component.literal(" 房间玩家列表 "), this.font));
         
         addPlayerListToLayout(content);
         
@@ -399,7 +403,7 @@ public class TerracottaDashboard extends TerracottaBaseScreen {
                 try {
                     JsonArray profiles = lastStateJson.getAsJsonArray("profiles");
                     if (profiles.size() > 0) {
-                        layout.addChild(new StringWidget(Component.literal("--- 当前玩家 (" + profiles.size() + ") ---"), this.font));
+                        layout.addChild(new StringWidget(Component.literal(" 当前玩家 (" + profiles.size() + ") "), this.font));
                         for (JsonElement p : profiles) {
                             JsonObject profile = p.getAsJsonObject();
                             String name = profile.get("name").getAsString();
@@ -416,7 +420,7 @@ public class TerracottaDashboard extends TerracottaBaseScreen {
                 try {
                     var players = lastStateJson.getAsJsonArray("players");
                     if (players.size() > 0) {
-                        layout.addChild(new StringWidget(Component.literal("--- 当前玩家 (" + players.size() + ") ---"), this.font));
+                        layout.addChild(new StringWidget(Component.literal(" 当前玩家 (" + players.size() + ") "), this.font));
                         for (var p : players) {
                             String pName = p.getAsString();
                             layout.addChild(new StringWidget(Component.literal(pName), this.font));
@@ -464,7 +468,7 @@ public class TerracottaDashboard extends TerracottaBaseScreen {
         this.isUiConnected = false;
         LinearLayout contentLayout = LinearLayout.vertical().spacing(15);
 
-        // 1. 加入房间按钮
+        // 加入房间按钮
         contentLayout.addChild(Button.builder(Component.literal("加入房间"), button -> {
             // 优先检查动态端口
             if (TerracottaApiClient.hasDynamicPort()) {
@@ -474,14 +478,14 @@ public class TerracottaDashboard extends TerracottaBaseScreen {
             }
         }).width(200).build());
 
-        // 2. 设置按钮
+        // 设置按钮
         contentLayout.addChild(Button.builder(Component.literal("设置"), button -> {
             this.minecraft.setScreen(new TerracottaConfigScreen(this));
         }).width(200).build());
 
         this.layout.addToContents(contentLayout);
 
-        // 3. 退出按钮 (底部)
+        // 退出按钮 (底部)
         this.layout.addToFooter(Button.builder(Component.literal("退出"), button -> {
             this.onClose();
         }).width(200).build());
