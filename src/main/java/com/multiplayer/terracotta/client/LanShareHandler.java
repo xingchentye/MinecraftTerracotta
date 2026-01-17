@@ -3,7 +3,6 @@ package com.multiplayer.terracotta.client;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.multiplayer.terracotta.client.gui.StartupScreen;
-import com.multiplayer.terracotta.logic.ProcessLauncher;
 import com.multiplayer.terracotta.network.TerracottaApiClient;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
@@ -20,7 +19,6 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.ScreenEvent;
 
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
 
 @EventBusSubscriber(modid = "minecraftterracotta", value = Dist.CLIENT)
 public class LanShareHandler {
@@ -31,10 +29,8 @@ public class LanShareHandler {
     @SubscribeEvent
     public static void onScreenInit(ScreenEvent.Init.Post event) {
         if (event.getScreen() instanceof ShareToLanScreen screen) {
-            // 添加陶瓦联机开关按钮
-            // 位置：右上角
             int width = screen.width;
-            int buttonWidth = 120; // 稍微缩小一点
+            int buttonWidth = 120;
             int x = width - buttonWidth - 5;
             int y = 5; 
 

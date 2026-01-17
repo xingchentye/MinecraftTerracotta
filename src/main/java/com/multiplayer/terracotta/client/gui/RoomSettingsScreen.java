@@ -2,12 +2,8 @@ package com.multiplayer.terracotta.client.gui;
 
 import com.multiplayer.terracotta.Config;
 import com.multiplayer.terracotta.network.TerracottaApiClient;
-import net.minecraft.ChatFormatting;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
-import net.minecraft.client.gui.components.EditBox;
-import net.minecraft.client.gui.screens.PauseScreen;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.worldselection.EditGameRulesScreen;
 import net.minecraft.client.server.IntegratedServer;

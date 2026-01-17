@@ -27,7 +27,6 @@ public class MultiplayerMenuHandler {
     public static void onScreenInit(ScreenEvent.Init.Post event) {
         if (event.getScreen() instanceof JoinMultiplayerScreen) {
             // 将按钮放置在界面右上角，避免遮挡主要功能
-            // 宽度 100，高度 20，距离右边 10，距离顶部 10
             int buttonWidth = 100;
             int buttonHeight = 20;
             int x = event.getScreen().width - buttonWidth - 10;

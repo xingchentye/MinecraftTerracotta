@@ -30,7 +30,6 @@ public class TerracottaConfigScreen extends TerracottaBaseScreen {
         GridLayout grid = new GridLayout();
         grid.defaultCellSetting().paddingBottom(8);
 
-        // Row 1: Path
         grid.addChild(new StringWidget(Component.literal("核心路径"), this.font), 0, 0);
         EditBox pathBox = new EditBox(this.font, 0, 0, 200, 20, Component.literal("Path"));
         pathBox.setValue(this.tempPath);
@@ -38,14 +37,12 @@ public class TerracottaConfigScreen extends TerracottaBaseScreen {
         pathBox.setResponder(val -> this.tempPath = val);
         grid.addChild(pathBox, 0, 1);
 
-        // Row 2: Auto Update Toggle
         Button autoUpdateBtn = Button.builder(Component.literal("自动更新: " + (this.tempAutoUpdate ? "开" : "关")), button -> {
             this.tempAutoUpdate = !this.tempAutoUpdate;
             button.setMessage(Component.literal("自动更新: " + (this.tempAutoUpdate ? "开" : "关")));
         }).width(150).build();
         grid.addChild(autoUpdateBtn, 1, 0, 1, 2); // Span 2 columns
 
-        // Row 3: Auto Start Toggle
         Button autoStartBtn = Button.builder(Component.literal("自动启动: " + (this.tempAutoStart ? "开" : "关")), button -> {
             this.tempAutoStart = !this.tempAutoStart;
             button.setMessage(Component.literal("自动启动: " + (this.tempAutoStart ? "开" : "关")));
@@ -54,7 +51,6 @@ public class TerracottaConfigScreen extends TerracottaBaseScreen {
 
         this.layout.addToContents(grid);
 
-        // Footer Buttons
         LinearLayout footerButtons = LinearLayout.horizontal().spacing(8);
         footerButtons.addChild(Button.builder(Component.literal("保存并返回"), button -> {
             this.saveConfig();
