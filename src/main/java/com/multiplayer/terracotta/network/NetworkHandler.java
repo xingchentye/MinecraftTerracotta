@@ -55,13 +55,7 @@ public class NetworkHandler {
             return;
         }
 
-        // 备用检查: 检查进程是否运行
-        if (ProcessLauncher.isRunning()) {
-            minecraft.setScreen(new TerracottaDashboard(minecraft.screen));
-            return;
-        }
-
-        // 未运行，进入启动界面
+        // 未连接后端，进入启动界面
         minecraft.setScreen(new StartupScreen(minecraft.screen));
     }
 

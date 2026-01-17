@@ -59,7 +59,7 @@ public class InGameMenuHandler {
 
             // 3. 创建房间按钮
             Button createRoomBtn = Button.builder(Component.literal("创建房间"), button -> {
-                if (!ProcessLauncher.isRunning()) {
+                if (!TerracottaApiClient.hasDynamicPort()) {
                      Minecraft.getInstance().setScreen(new StartupScreen(screen, () -> {
                          Minecraft.getInstance().setScreen(screen);
                          String playerName = Minecraft.getInstance().getUser().getName();
@@ -158,6 +158,7 @@ public class InGameMenuHandler {
             TerracottaApiClient.getState().whenComplete((stateJson, ex) -> {
                 if (ex != null || stateJson == null) {
                     // 获取状态失败（后端未启动或连接断开），重置 UI
+                    TerracottaApiClient.clearDynamicPort();
                     Minecraft.getInstance().execute(() -> {
                          infoBtn.visible = false;
                          settingsBtn.visible = false;
@@ -199,14 +200,12 @@ public class InGameMenuHandler {
                                 if (Minecraft.getInstance().getSingleplayerServer() != null 
                                     && Minecraft.getInstance().getSingleplayerServer().isPublished()) {
                                     createRoomBtn.visible = true;
-                                    // 只要不是 scanning (请求中) 状态，都允许重新创建
-                                    // 如果是 idle, waiting, 或者是其他异常状态，都重置
-                                    if (!"scanning".equals(state) && !"hosting".equals(state) && !"guesting".equals(state)) {
-                                         createRoomBtn.setMessage(Component.literal("创建房间"));
-                                         createRoomBtn.active = true;
-                                    } else if ("scanning".equals(state)) {
+                                    if ("scanning".equals(state)) {
                                          createRoomBtn.setMessage(Component.literal("请求中..."));
                                          createRoomBtn.active = false;
+                                    } else {
+                                         createRoomBtn.setMessage(Component.literal("创建房间"));
+                                         createRoomBtn.active = true;
                                     }
                                 } else {
                                     createRoomBtn.visible = false;

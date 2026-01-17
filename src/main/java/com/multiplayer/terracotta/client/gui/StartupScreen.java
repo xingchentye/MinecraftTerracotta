@@ -3,9 +3,8 @@ package com.multiplayer.terracotta.client.gui;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
+import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -22,7 +21,6 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
-import org.jetbrains.annotations.NotNull;
 
 /**
  * 陶瓦联机启动界面
@@ -48,6 +46,8 @@ public class StartupScreen extends TerracottaBaseScreen {
     private boolean isStarted = false;
     /** 是否保持进程存活 (退出界面时不杀进程) */
     private boolean keepProcessAlive = false;
+    /** 是否是全新启动 (非复用) */
+    private boolean isFreshLaunch = false;
     /** 启动完成后的回调 */
     private Runnable onStartupComplete;
 
@@ -88,7 +88,7 @@ public class StartupScreen extends TerracottaBaseScreen {
     protected void initContent() {
         // 添加底部的取消按钮
         this.layout.addToFooter(Button.builder(Component.literal("取消"), (button) -> {
-            this.onClose();
+            this.cancelAndClose();
         }).width(200).build());
 
         // 如果尚未开始且无错误，启动流程
@@ -103,7 +103,36 @@ public class StartupScreen extends TerracottaBaseScreen {
      */
     private void startStartupSequence() {
         isStarted = true;
-        CompletableFuture.runAsync(() -> {
+        
+        // 尝试复用已有进程
+        if (TerracottaApiClient.hasDynamicPort()) {
+            isFreshLaunch = false;
+            updateStatus("检测到后台服务运行中...", 0.5);
+            CompletableFuture.runAsync(() -> {
+                if (TerracottaApiClient.checkHealth().join()) {
+                    updateStatus("服务状态正常，正在连接...", 1.0);
+                    try {
+                        Thread.sleep(500); // 短暂延迟以展示状态
+                    } catch (InterruptedException ignored) {}
+                    
+                    this.minecraft.execute(this::onStartupSuccess);
+                } else {
+                    LOGGER.warn("后台服务无响应，将重新启动...");
+                    performFullStartup();
+                }
+            });
+            return;
+        }
+
+        performFullStartup();
+    }
+
+    /**
+      * 执行完整的启动流程
+      */
+     private void performFullStartup() {
+         isFreshLaunch = true;
+         CompletableFuture.runAsync(() -> {
             try {
                 // 1. 平台检测阶段
                 updateStatus("正在检测系统环境...", 0.05);
@@ -361,14 +390,19 @@ public class StartupScreen extends TerracottaBaseScreen {
          }
          
          // 回到主线程执行后续操作
-         Minecraft.getInstance().execute(() -> {
-             if (onStartupComplete != null) {
-                 onStartupComplete.run();
-             } else {
-                 keepProcessAlive = true; // 标记保持进程存活
-                 Minecraft.getInstance().setScreen(new TerracottaDashboard(parent));
-             }
-         });
+         Minecraft.getInstance().execute(this::onStartupSuccess);
+    }
+
+    /**
+     * 启动成功后的处理
+     */
+    private void onStartupSuccess() {
+        keepProcessAlive = true; // 只要启动成功，就保持进程存活
+        if (onStartupComplete != null) {
+            onStartupComplete.run();
+        } else {
+            Minecraft.getInstance().setScreen(new TerracottaDashboard(parent));
+        }
     }
 
     /**
@@ -431,14 +465,35 @@ public class StartupScreen extends TerracottaBaseScreen {
     }
     
     /**
+     * 处理键盘输入 (拦截 ESC)
+     */
+    @Override
+    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (keyCode == 256) { // ESC
+            this.cancelAndClose();
+            return true;
+        }
+        return super.keyPressed(keyCode, scanCode, modifiers);
+    }
+
+    /**
+     * 用户主动取消并关闭
+     */
+    private void cancelAndClose() {
+        // 只有当这是新启动的进程，且尚未完成时，才停止进程
+        // 如果是复用进程，或者是已经完成启动但被用户取消(理论上不会)，也不停止
+        if (isFreshLaunch && !isFinished) {
+            ProcessLauncher.stop();
+        }
+        this.onClose();
+    }
+    
+    /**
      * 关闭界面时的处理
-     * 如果未标记保持存活，则停止后台进程
+     * 不再在此处停止进程，防止非用户意图的关闭导致误杀
      */
     @Override
     public void onClose() {
-        if (!keepProcessAlive) {
-            ProcessLauncher.stop(); // 退出时停止进程
-        }
         this.minecraft.setScreen(this.parent);
     }
 }

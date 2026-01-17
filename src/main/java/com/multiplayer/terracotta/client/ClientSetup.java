@@ -53,7 +53,7 @@ public class ClientSetup {
      * 如果检测到状态变为 host-ok，自动复制房间号
      */
     private static void checkBackendState() {
-        if (!ProcessLauncher.isRunning()) {
+        if (!TerracottaApiClient.hasDynamicPort()) {
             wasHostOk = false;
             lastRoomCode = "";
             return;
@@ -76,7 +76,7 @@ public class ClientSetup {
                                 Minecraft.getInstance().execute(() -> {
                                     Minecraft.getInstance().keyboardHandler.setClipboard(roomCode);
                                     if (Minecraft.getInstance().gui != null && Minecraft.getInstance().gui.getChat() != null) {
-                                        Minecraft.getInstance().gui.getChat().addMessage(Component.literal("[Terracotta] 房间号 " + roomCode + " 已自动复制到剪贴板。").withStyle(ChatFormatting.GREEN));
+                                        Minecraft.getInstance().gui.getChat().addMessage(Component.literal("[Terracotta] 房间号已自动复制到剪贴板。").withStyle(ChatFormatting.GREEN));
                                     }
                                 });
                             }
@@ -102,8 +102,8 @@ public class ClientSetup {
         if (event.getScreen() instanceof TitleScreen && !hasAutoStarted) {
             hasAutoStarted = true;
             
-            // 如果配置启用了自动启动，且进程未运行
-            if (Config.AUTO_START_BACKEND.get() && !ProcessLauncher.isRunning()) {
+            // 如果配置启用了自动启动，且尚未连接后端
+            if (Config.AUTO_START_BACKEND.get() && !TerracottaApiClient.hasDynamicPort()) {
                 // 切换到启动界面进行初始化
                 // 使用 execute 确保在渲染线程安全执行（虽然事件本身就在主线程）
                 Minecraft.getInstance().execute(() -> {

@@ -15,6 +15,8 @@ import java.nio.charset.StandardCharsets;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.multiplayer.terracotta.network.TerracottaApiClient;
+
 /**
  * 外部进程管理器
  * 负责启动和管理陶瓦联机进程
@@ -24,6 +26,8 @@ import org.slf4j.LoggerFactory;
 public class ProcessLauncher {
     private static final Logger LOGGER = LoggerFactory.getLogger(ProcessLauncher.class);
     private static final AtomicReference<Process> currentProcess = new AtomicReference<>();
+    private static volatile ProcessStatus status = ProcessStatus.STOPPED;
+    private static volatile boolean stopping = false;
 
     /**
      * 检查进程是否正在运行
@@ -32,7 +36,19 @@ public class ProcessLauncher {
      */
     public static boolean isRunning() {
         Process process = currentProcess.get();
-        return process != null && process.isAlive();
+        boolean alive = process != null && process.isAlive();
+        if (!alive && status == ProcessStatus.RUNNING) {
+            status = ProcessStatus.CRASHED;
+        }
+        return alive;
+    }
+
+    public static ProcessStatus getStatus() {
+        return status;
+    }
+
+    public static boolean isCrashed() {
+        return status == ProcessStatus.CRASHED;
     }
 
     /**
@@ -57,8 +73,8 @@ public class ProcessLauncher {
      * @throws IOException 如果启动过程中发生 I/O 错误
      */
     public static void launch(Path executablePath, Path workDir, java.util.function.Consumer<String> outputHandler, String... args) throws IOException {
-        stop(); // 停止已有进程
-        killExistingProcesses(); // 清理系统中所有残留的陶瓦进程
+        stopping = false;
+        status = ProcessStatus.STARTING;
 
         LOGGER.info("正在启动进程: {} 参数: {}", executablePath, args);
         
@@ -114,17 +130,33 @@ public class ProcessLauncher {
                 // 忽略流关闭错误
             }
         }, "Terracotta-Error").start();
+
+        new Thread(() -> {
+            try {
+                int exitCode = process.waitFor();
+                LOGGER.info("陶瓦联机进程退出，代码: {}", exitCode);
+                if (currentProcess.get() == process) {
+                    currentProcess.compareAndSet(process, null);
+                    if (stopping) {
+                        status = ProcessStatus.STOPPED;
+                    } else if (status == ProcessStatus.STARTING) {
+                        status = ProcessStatus.RUNNING;
+                    }
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }, "Terracotta-Watcher").start();
     }
 
     /**
      * 停止当前进程
      */
     public static void stop() {
-        // 尝试通过 API 优雅关闭
+        stopping = true;
         try {
-            com.multiplayer.terracotta.network.TerracottaApiClient.panic(false).join();
+            TerracottaApiClient.panic(false).join();
         } catch (Exception e) {
-            // 忽略 API 调用失败 (可能进程已经不在了)
         }
 
         Process process = currentProcess.getAndSet(null);
@@ -141,6 +173,8 @@ public class ProcessLauncher {
                 process.destroyForcibly();
             }
         }
+        TerracottaApiClient.clearDynamicPort();
+        status = ProcessStatus.STOPPED;
     }
 
     /**
@@ -196,5 +230,12 @@ public class ProcessLauncher {
         } catch (Exception e) {
             LOGGER.warn("清理残留进程时发生错误", e);
         }
+    }
+
+    public enum ProcessStatus {
+        STOPPED,
+        STARTING,
+        RUNNING,
+        CRASHED
     }
 }

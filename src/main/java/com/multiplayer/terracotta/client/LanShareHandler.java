@@ -26,6 +26,7 @@ import java.util.concurrent.TimeUnit;
 public class LanShareHandler {
     private static boolean enableTerracotta = false;
     private static final Gson GSON = new Gson();
+    private static String lastShownRoomCode = "";
 
     @SubscribeEvent
     public static void onScreenInit(ScreenEvent.Init.Post event) {
@@ -71,7 +72,7 @@ public class LanShareHandler {
                     Minecraft mc = Minecraft.getInstance();
                     if (enableTerracotta && mc.getSingleplayerServer() != null && mc.getSingleplayerServer().isPublished()) {
                         int port = mc.getSingleplayerServer().getPort();
-                        if (ProcessLauncher.isRunning()) {
+                        if (TerracottaApiClient.hasDynamicPort()) {
                             startTerracottaHosting(port);
                         } else {
                             // 如果后端未启动，先启动后端
@@ -148,10 +149,12 @@ public class LanShareHandler {
 
     private static void showRoomCodeInChat(String roomCode) {
         Minecraft mc = Minecraft.getInstance();
-        
-        // 自动复制到剪贴板
-        mc.keyboardHandler.setClipboard(roomCode);
-        
+
+        if (roomCode != null && roomCode.equals(lastShownRoomCode)) {
+            return;
+        }
+        lastShownRoomCode = roomCode;
+
         MutableComponent msg = Component.literal("[Terracotta] 房间已创建！房间号: ");
         msg.withStyle(ChatFormatting.GREEN);
         
@@ -166,6 +169,5 @@ public class LanShareHandler {
         msg.append(code);
         
         mc.gui.getChat().addMessage(msg);
-        mc.gui.getChat().addMessage(Component.literal("[Terracotta] 房间号已自动复制到剪贴板。").withStyle(ChatFormatting.GRAY));
     }
 }

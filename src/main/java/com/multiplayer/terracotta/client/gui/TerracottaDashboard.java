@@ -147,7 +147,7 @@ public class TerracottaDashboard extends TerracottaBaseScreen {
      * 用于界面初始化时的状态同步
      */
     private void checkStateImmediately() {
-        if (!TerracottaApiClient.hasDynamicPort() && !ProcessLauncher.isRunning()) return;
+        if (!TerracottaApiClient.hasDynamicPort()) return;
 
         TerracottaApiClient.getState().thenAccept(stateJson -> {
             if (stateJson != null) {
