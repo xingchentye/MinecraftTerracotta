@@ -27,6 +27,7 @@ public class TerracottaApiClient {
     private static final Gson GSON = new Gson();
     /** 动态端口 (由后端启动时分配) */
     private static int dynamicPort = -1;
+    private static final int DEFAULT_PORT = 25566;
 
     /**
      * 设置动态端口 (通常由 ProcessLauncher 从输出中捕获)
@@ -62,7 +63,7 @@ public class TerracottaApiClient {
      * @return 端口号
      */
     public static int getPort() {
-        return dynamicPort > 0 ? dynamicPort : Config.SERVER_PORT.get();
+        return dynamicPort > 0 ? dynamicPort : DEFAULT_PORT;
     }
 
     /** HTTP 客户端实例，配置超时时间为 2 秒 */
@@ -80,7 +81,7 @@ public class TerracottaApiClient {
         return String.format("http://127.0.0.1:%d", getPort());
     }
 
-    // --- API 方法 ---
+    //  API 方法 
 
     /**
      * 获取后端元数据信息
@@ -195,8 +196,6 @@ public class TerracottaApiClient {
                 .thenApply(v -> (String) null)
                 .exceptionally(e -> "Exception: " + e.getMessage());
     }
-
-    // --- 辅助方法 ---
 
     /**
      * URL 编码字符串
