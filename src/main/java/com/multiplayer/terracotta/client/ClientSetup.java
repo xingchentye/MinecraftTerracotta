@@ -1,6 +1,8 @@
 package com.multiplayer.terracotta.client;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.multiplayer.terracotta.Config;
 import com.multiplayer.terracotta.client.gui.StartupScreen;
@@ -39,6 +41,7 @@ public class ClientSetup {
     private static String lastRoomCode = "";
     private static final Gson GSON = new Gson();
     private static String lastStateValue = "";
+    private static java.util.Set<String> lastMemberNames = new java.util.HashSet<>();
 
     private static class SimpleToast implements Toast {
         private final Component title;
@@ -131,6 +134,7 @@ public class ClientSetup {
             }
             wasHostOk = false;
             lastRoomCode = "";
+            lastMemberNames.clear();
             return;
         }
 
@@ -145,6 +149,7 @@ public class ClientSetup {
                         lastStateValue = state;
                     }
                     boolean isHostOk = "host-ok".equals(state);
+                    boolean isConnected = isHostOk || "guest-ok".equals(state);
 
                     if (isHostOk) {
                         if (json.has("room")) {
@@ -161,6 +166,55 @@ public class ClientSetup {
                         }
                         lastRoomCode = "";
                     }
+
+                    if (isConnected) {
+                        java.util.Set<String> currentMembers = new java.util.HashSet<>();
+                        if (json.has("profiles")) {
+                            JsonArray profiles = json.getAsJsonArray("profiles");
+                            for (JsonElement element : profiles) {
+                                JsonObject profile = element.getAsJsonObject();
+                                if (profile.has("name")) {
+                                    currentMembers.add(profile.get("name").getAsString());
+                                }
+                            }
+                        } else if (json.has("players")) {
+                            JsonArray players = json.getAsJsonArray("players");
+                            for (JsonElement element : players) {
+                                currentMembers.add(element.getAsString());
+                            }
+                        }
+
+                        if (!currentMembers.isEmpty() || !lastMemberNames.isEmpty()) {
+                            java.util.Set<String> joined = new java.util.HashSet<>(currentMembers);
+                            joined.removeAll(lastMemberNames);
+
+                            java.util.Set<String> left = new java.util.HashSet<>(lastMemberNames);
+                            left.removeAll(currentMembers);
+
+                            if ((!joined.isEmpty() || !left.isEmpty()) && Minecraft.getInstance() != null) {
+                                Minecraft.getInstance().execute(() -> {
+                                    String selfName = Minecraft.getInstance().player != null
+                                            ? Minecraft.getInstance().player.getGameProfile().getName()
+                                            : null;
+
+                                    for (String name : joined) {
+                                        if (selfName != null && selfName.equals(name)) continue;
+                                        showToast(Component.literal("成员加入"), Component.literal(name + " 加入了房间"));
+                                    }
+
+                                    for (String name : left) {
+                                        if (selfName != null && selfName.equals(name)) continue;
+                                        showToast(Component.literal("成员退出"), Component.literal(name + " 已离开房间"));
+                                    }
+                                });
+                            }
+
+                            lastMemberNames = currentMembers;
+                        }
+                    } else {
+                        lastMemberNames.clear();
+                    }
+
                     wasHostOk = isHostOk;
                 }
             } catch (Exception ignored) {}
