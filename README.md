@@ -4,19 +4,13 @@ Minecraft Terracotta 是一个基于 NeoForge 的 Minecraft 模组，旨在提�
 
 ## 📂 项目结构
 
-本项目包含两部分核心代码：
+本项目主要包含 Java Mod 代码：
 
 *   **Java Mod (`src/main/java`)**:
     *   基于 NeoForge 加载器。
     *   负责游戏内 GUI (仪表盘、大厅、设置界面)。
-    *   负责与后端进程的通信 (HTTP API)。
+    *   负责与外部 Terracotta 核心进程的通信 (HTTP API + Socket)。
     *   主要包路径: `com.multiplayer.terracotta`
-
-*   **Rust Backend (`Terracotta/`)**:
-    *   **核心来源**: [Terracotta by burningtnt](https://github.com/burningtnt/Terracotta)
-    *   基于 Rust 编写的独立可执行文件。
-    *   集成了 EasyTier 核心网络功能。
-    *   提供 HTTP API 供 Mod 调用。
 
 ## 🛠️ 构建指南
 
@@ -42,14 +36,7 @@ Minecraft Terracotta 是一个基于 NeoForge 的 Minecraft 模组，旨在提�
     ```
     构建产物位于 `build/libs/` 目录。
 
-3.  **构建后端 (Rust)**
-    如果你需要自行修改后端代码：
-    ```bash
-    cd Terracotta
-    cargo build --release
-    ```
-    构建产物位于 `Terracotta/target/release/` 目录。
-    *注意：Mod 运行时会自动下载或寻找匹配版本的后端可执行文件。*
+> 注意：Terracotta 后端核心为独立项目，本仓库不再包含或维护其源码。模组将在运行时自动下载或使用用户在配置中指定的外部可执行文件。
 
 ## 📖 使用说明
 
@@ -65,7 +52,26 @@ Minecraft Terracotta 是一个基于 NeoForge 的 Minecraft 模组，旨在提�
 
 ## 👏 鸣谢
 
-*   **Terracotta Backend**: 本项目的后端核心源自 [burningtnt/Terracotta](https://github.com/burningtnt/Terracotta)，感谢原作者的开源贡献。
+*   **Terracotta Backend**: 本项目在设计上依赖后端核心项目 [burningtnt/Terracotta](https://github.com/burningtnt/Terracotta)，感谢原作者的开源贡献。
+
+## 🌐 i18n / 本地化
+
+本模组使用 Minecraft 原生语言文件系统进行本地化，语言文件位于：
+
+* `src/main/resources/assets/minecraftterracotta/lang/en_us.json`
+* `src/main/resources/assets/minecraftterracotta/lang/zh_cn.json`
+
+界面文本（如仪表盘标题、按钮、状态提示等）通过语言键进行管理，例如：
+
+* `terracotta.dashboard.title`
+* `terracotta.host.title`
+* `terracotta.state.host_starting`
+
+如果你希望贡献新的语言翻译，可以：
+
+1.  复制 `en_us.json` 为新的语言文件（例如 `xx_yy.json`）。
+2.  按现有键值结构补全对应译文。
+3.  提交 Pull Request。
 
 ## 📄 许可证
 
