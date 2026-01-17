@@ -89,6 +89,7 @@ public class NetworkClient {
                         LOGGER.info("连接被远程主机关闭");
                         BufferPool.release(attachment);
                         close();
+                        TerracottaApiClient.clearDynamicPort();
                         return;
                     }
                     
