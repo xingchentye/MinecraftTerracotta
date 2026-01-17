@@ -134,7 +134,7 @@ public class StartupScreen extends TerracottaBaseScreen {
          isFreshLaunch = true;
          CompletableFuture.runAsync(() -> {
             try {
-                // 1. 平台检测阶段
+                // 平台检测阶段
                 updateStatus("正在检测系统环境...", 0.05);
                 PlatformHelper.OS os = PlatformHelper.getOS();
                 PlatformHelper.Arch arch = PlatformHelper.getArch();
@@ -170,7 +170,7 @@ public class StartupScreen extends TerracottaBaseScreen {
                     return;
                 }
                 
-                // 2. 版本检查阶段
+                // 版本检查阶段
                 updateStatus("正在检查更新...", 0.1);
                 String version;
                 String filename;
@@ -209,20 +209,20 @@ public class StartupScreen extends TerracottaBaseScreen {
                 String downloadUrl = String.format("https://gitee.com/burningtnt/Terracotta/releases/download/%s/%s", version, filename);
                 LOGGER.info("下载地址: {}", downloadUrl);
 
-                // 3. 下载阶段
+                // 下载阶段
                 updateStatus("正在下载组件: " + filename, 0.2);
                 Path downloadedFile = DownloadManager.download(downloadUrl, downloadDir, filename, (p) -> {
                     this.progress = 0.2 + (p * 0.6);
                     this.subStatusText = String.format("%.1f%%", p * 100);
                 }).join();
 
-                // 4. 解压阶段 (如果是压缩包)
+                // 解压阶段 (如果是压缩包)
                 if (filename.endsWith(".tar.gz")) {
                     updateStatus("正在解压资源...", 0.85);
                     DownloadManager.extractTarGz(downloadedFile, downloadDir);
                 }
                 
-                // 5. 文件处理与启动阶段
+                // 文件处理与启动阶段
                 // 如果直接下载的是 exe，可能需要重命名
                 if (filename.endsWith(".exe") && !Files.exists(downloadDir.resolve(exeName))) {
                      if (!filename.equals(exeName)) {
@@ -284,11 +284,11 @@ public class StartupScreen extends TerracottaBaseScreen {
     private Path findExecutable(Path dir, String exeName) {
         if (!Files.exists(dir)) return null;
         try {
-            // 1. 优先检查直接路径
+            // 优先检查直接路径
             Path direct = dir.resolve(exeName);
             if (Files.exists(direct)) return direct;
             
-            // 2. 递归查找 (深度3)
+            // 递归查找 (深度3)
             try (var stream = Files.walk(dir, 3)) {
                 return stream
                     .filter(p -> p.getFileName().toString().equals(exeName))
@@ -382,7 +382,7 @@ public class StartupScreen extends TerracottaBaseScreen {
          }
          
          // 尝试建立 Socket 连接 (可选)
-         String host = Config.SERVER_HOST.get();
+         String host = "127.0.0.1";
          try {
              NetworkClient.getInstance().connect(host, port).join();
          } catch (Exception e) {
