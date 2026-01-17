@@ -18,13 +18,13 @@ logoFile="icon.png"
 [[dependencies.minecraftterracotta]]
     modId="neoforge"
     type="required"
-    versionRange="[21.1,)"
+    versionRange="[0,)"
     ordering="NONE"
     side="BOTH"
 
 [[dependencies.minecraftterracotta]]
     modId="minecraft"
     type="required"
-    versionRange="[1.21.1]"
+    versionRange="[1,)"
     ordering="NONE"
     side="BOTH"
