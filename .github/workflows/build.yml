@@ -21,5 +21,20 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Get mod version
+        id: get_version
+        run: echo "version=$(grep '^mod_version=' gradle.properties | cut -d'=' -f2)" >> "$GITHUB_OUTPUT"
+
       - name: Build with Gradle
         run: ./gradlew build
+
+      - name: Create or update GitHub Release
+        if: github.event_name == 'push'
+        uses: ncipollo/release-action@v1
+        with:
+          tag: v${{ steps.get_version.outputs.version }}
+          name: MinecraftTerracotta v${{ steps.get_version.outputs.version }}
+          artifacts: build/libs/minecraftterracotta-${{ steps.get_version.outputs.version }}.jar
+          allowUpdates: true
+          replacesArtifacts: true
+          token: ${{ secrets.GITHUB_TOKEN }}
