@@ -14,8 +14,6 @@ import com.multiplayer.terracotta.network.TerracottaApiClient;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.toasts.Toast;
-import net.minecraft.client.gui.components.toasts.ToastComponent;
 import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
@@ -26,6 +24,7 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.ScreenEvent;
+import net.neoforged.neoforge.client.event.RenderGuiEvent;
 
 @EventBusSubscriber(modid = "minecraftterracotta", value = Dist.CLIENT)
 public class ClientSetup {
@@ -37,57 +36,33 @@ public class ClientSetup {
     private static final Gson GSON = new Gson();
     private static String lastStateValue = "";
     private static java.util.Set<String> lastMemberNames = new java.util.HashSet<>();
+    private static final java.util.List<HudToast> activeToasts = new java.util.ArrayList<>();
 
-    private static class SimpleToast implements Toast {
+    private static class HudToast {
         private final Component title;
         private final Component message;
         private final int width;
-        private long firstDrawTime;
+        private final int height;
+        private final long startTime;
 
-        private SimpleToast(Component title, Component message) {
+        private HudToast(Component title, Component message, int width, int height, long startTime) {
             this.title = title;
             this.message = message;
-            this.width = calculateToastWidth(title, message);
-        }
-
-        @Override
-        public Visibility render(GuiGraphics guiGraphics, ToastComponent toastComponent, long time) {
-            if (firstDrawTime == 0L) {
-                firstDrawTime = time;
-            }
-
-            int width = width();
-            int height = height();
-
-            guiGraphics.fill(0, 0, width, height, 0xCC000000);
-
-            var font = toastComponent.getMinecraft().font;
-            guiGraphics.drawString(font, title, 8, 8, 0xFFFFFF, false);
-            if (message != null) {
-                guiGraphics.drawString(font, message, 8, 20, 0xFFFFFF, false);
-            }
-
-            return time - firstDrawTime >= 2000L ? Visibility.HIDE : Visibility.SHOW;
-        }
-
-        @Override
-        public int width() {
-            return width;
-        }
-
-        @Override
-        public int height() {
-            return 32;
+            this.width = width;
+            this.height = height;
+            this.startTime = startTime;
         }
     }
 
     public static void showToast(Component title, Component message) {
         Minecraft mc = Minecraft.getInstance();
-        if (mc == null || mc.gui == null || mc.gui.getChat() == null) {
+        if (mc == null || mc.font == null) {
             return;
         }
-        Component content = message != null ? title.copy().append(": ").append(message) : title;
-        mc.gui.getChat().addMessage(content);
+        int width = calculateToastWidth(title, message);
+        int height = 32;
+        long now = System.currentTimeMillis();
+        activeToasts.add(new HudToast(title, message, width, height, now));
     }
 
     private static int calculateToastWidth(Component title, Component message) {
@@ -236,10 +211,21 @@ public class ClientSetup {
         });
     }
 
+    private static void showRoomCodeToast(String roomCode) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc == null || mc.font == null) {
+            return;
+        }
+        int width = calculateToastWidth(Component.literal("房间号"), Component.literal("房间号: " + roomCode));
+        int height = 32;
+        long now = System.currentTimeMillis();
+        activeToasts.add(new HudToast(Component.literal("房间号"), Component.literal("房间号: " + roomCode), width, height, now));
+    }
+
     private static void showRoomCodeToasts(String roomCode) {
         Minecraft minecraft = Minecraft.getInstance();
         minecraft.execute(() -> {
-            showToast(Component.literal("房间号"), Component.literal("房间号: " + roomCode));
+            showRoomCodeToast(roomCode);
             showRoomCodeInChat(roomCode);
             try {
                 minecraft.keyboardHandler.setClipboard(roomCode);
@@ -248,6 +234,49 @@ public class ClientSetup {
                 showToast(Component.literal("提示"), Component.literal("复制失败，请手动复制房间号"));
             }
         });
+    }
+
+    @SubscribeEvent
+    public static void onRenderGui(RenderGuiEvent.Post event) {
+        if (activeToasts.isEmpty()) {
+            return;
+        }
+        Minecraft mc = Minecraft.getInstance();
+        if (mc == null || mc.font == null) {
+            return;
+        }
+        GuiGraphics guiGraphics = event.getGuiGraphics();
+        int screenWidth = mc.getWindow().getGuiScaledWidth();
+        long now = System.currentTimeMillis();
+        int y = 5;
+        int margin = 5;
+
+        java.util.Iterator<HudToast> iterator = activeToasts.iterator();
+        while (iterator.hasNext()) {
+            HudToast toast = iterator.next();
+            long age = now - toast.startTime;
+            if (age >= 2000L) {
+                iterator.remove();
+                continue;
+            }
+            double inDuration = 200.0;
+            double outDuration = 200.0;
+            double offset = 0.0;
+            if (age < inDuration) {
+                double t = age / inDuration;
+                offset = 1.0 - t;
+            } else if (age > 2000.0 - outDuration) {
+                double t = (age - (2000.0 - outDuration)) / outDuration;
+                offset = t;
+            }
+            int x = screenWidth - toast.width - 5 + (int) (toast.width * offset);
+            guiGraphics.fill(x, y, x + toast.width, y + toast.height, 0xCC000000);
+            guiGraphics.drawString(mc.font, toast.title, x + 8, y + 8, 0xFFFFFF, false);
+            if (toast.message != null) {
+                guiGraphics.drawString(mc.font, toast.message, x + 8, y + 20, 0xFFFFFF, false);
+            }
+            y += toast.height + margin;
+        }
     }
 
     @SubscribeEvent
