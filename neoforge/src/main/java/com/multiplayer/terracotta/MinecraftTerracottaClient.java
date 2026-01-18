@@ -11,7 +11,7 @@ import net.neoforged.neoforge.client.gui.ConfigurationScreen;
 import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
 
 @Mod(value = MinecraftTerracotta.MODID, dist = Dist.CLIENT)
-@EventBusSubscriber(modid = MinecraftTerracotta.MODID, value = Dist.CLIENT)
+@EventBusSubscriber(modid = MinecraftTerracotta.MODID, value = Dist.CLIENT, bus = EventBusSubscriber.Bus.MOD)
 public class MinecraftTerracottaClient {
     public MinecraftTerracottaClient(ModContainer container) {
         container.registerExtensionPoint(IConfigScreenFactory.class, ConfigurationScreen::new);
@@ -22,4 +22,3 @@ public class MinecraftTerracottaClient {
         MinecraftTerracotta.LOGGER.info("MinecraftTerracotta 客户端设置完成");
     }
 }
-
