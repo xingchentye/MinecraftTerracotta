@@ -1,0 +1,27 @@
+modLoader="javafml"
+loaderVersion="[1,)"
+license="AGPL-3.0"
+
+[[mods]]
+modId="minecraftterracotta"
+version="0.1.1"
+displayName="MinecraftTerracotta"
+authors="xingchentye"
+description='''
+Simple and easy-to-use P2P multiplayer solution for Minecraft.
+'''
+
+[[dependencies.minecraftterracotta]]
+modId="neoforge"
+type="required"
+versionRange="[21.1.218,)"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.minecraftterracotta]]
+modId="minecraft"
+type="required"
+versionRange="[1.21,1.22)"
+ordering="NONE"
+side="BOTH"
+
