@@ -71,6 +71,10 @@ jar {
 	from(project(':core').sourceSets.main.output)
 }
 
+tasks.named("remapJar") {
+	archiveFileName = "${mod_name}-v${mod_version}-fabric.jar"
+}
+
 // configure the maven publication
 publishing {
 	publications {

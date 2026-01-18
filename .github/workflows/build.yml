@@ -37,7 +37,8 @@ jobs:
           mkdir -p dist
           MOD_VERSION=${{ steps.vars.outputs.mod_version }}
           BRANCH_NAME=${GITHUB_REF_NAME##*/}
-          cp fabric/build/libs/*-fabric.jar "dist/MinecraftTerracotta-v${MOD_VERSION}-${BRANCH_NAME}-fabric.jar"
+          FABRIC_JAR=$(ls fabric/build/libs/*.jar | grep -v '\-sources\.jar' | head -n 1)
+          cp "$FABRIC_JAR" "dist/MinecraftTerracotta-v${MOD_VERSION}-${BRANCH_NAME}-fabric.jar"
           cp forge/build/libs/*-forge.jar "dist/MinecraftTerracotta-v${MOD_VERSION}-${BRANCH_NAME}-forge.jar"
           cp neoforge/build/libs/*-neoforge.jar "dist/MinecraftTerracotta-v${MOD_VERSION}-${BRANCH_NAME}-neoforge.jar"
 
