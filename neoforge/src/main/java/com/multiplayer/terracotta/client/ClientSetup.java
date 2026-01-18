@@ -1,5 +1,8 @@
 package com.multiplayer.terracotta.client;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -7,8 +10,6 @@ import com.google.gson.JsonObject;
 import com.multiplayer.terracotta.Config;
 import com.multiplayer.terracotta.client.gui.StartupScreen;
 import com.multiplayer.terracotta.network.TerracottaApiClient;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
@@ -82,7 +83,11 @@ public class ClientSetup {
 
     public static void showToast(Component title, Component message) {
         Minecraft mc = Minecraft.getInstance();
-        mc.getToasts().addToast(new SimpleToast(title, message));
+        if (mc == null || mc.gui == null || mc.gui.getChat() == null) {
+            return;
+        }
+        Component content = message != null ? title.copy().append(": ").append(message) : title;
+        mc.gui.getChat().addMessage(content);
     }
 
     private static int calculateToastWidth(Component title, Component message) {
