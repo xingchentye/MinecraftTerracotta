@@ -1,0 +1,37 @@
+{
+	"schemaVersion": 1,
+	"id": "minecraftterracotta",
+	"version": "${version}",
+	"name": "MinecraftTerracotta",
+	"description": "Simple and easy-to-use P2P multiplayer solution for Minecraft.",
+	"authors": [
+		"xingchentye"
+	],
+	"license": "AGPL-3.0",
+	"icon": "assets/minecraftterracotta/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"com.multiplayer.terracotta.fabric.MinecraftTerracotta"
+		],
+		"client": [
+			"com.multiplayer.terracotta.fabric.MinecraftTerracottaClient"
+		],
+		"fabric-datagen": [
+			"com.multiplayer.terracotta.fabric.MinecraftTerracottaDataGenerator"
+		]
+	},
+	"mixins": [
+		"minecraftterracotta.mixins.json",
+		{
+			"config": "minecraftterracotta.client.mixins.json",
+			"environment": "client"
+		}
+	],
+	"depends": {
+		"fabricloader": ">=0.18.4",
+		"minecraft": ">=1.21 <1.22",
+		"java": ">=21",
+		"fabric-api": "*"
+	}
+}

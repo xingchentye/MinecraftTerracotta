@@ -21,6 +21,7 @@ import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.ScreenEvent;
+import java.util.concurrent.CompletableFuture;
 
 @EventBusSubscriber(modid = "minecraftterracotta", value = Dist.CLIENT)
 public class InGameMenuHandler {
@@ -61,17 +62,38 @@ public class InGameMenuHandler {
                     return;
                 }
                 lastCreateClickTime = now;
+                Minecraft mc = Minecraft.getInstance();
                 if (!TerracottaApiClient.hasDynamicPort()) {
-                     Minecraft.getInstance().setScreen(new StartupScreen(screen, () -> {
-                         Minecraft.getInstance().setScreen(screen);
-                         String playerName = Minecraft.getInstance().getUser().getName();
-                         TerracottaApiClient.setScanning(playerName);
-                     }));
+                    mc.setScreen(new StartupScreen(screen, () -> {
+                        mc.setScreen(screen);
+                        String playerName = mc.getUser().getName();
+                        TerracottaApiClient.setScanning(playerName);
+                    }));
                 } else {
-                     String playerName = Minecraft.getInstance().getUser().getName();
-                     TerracottaApiClient.setScanning(playerName);
-                     button.setMessage(Component.literal("请求中..."));
-                     button.active = false;
+                    button.active = false;
+                    CompletableFuture
+                        .supplyAsync(() -> TerracottaApiClient.checkHealth().join())
+                        .thenAccept(healthy -> {
+                            if (!healthy) {
+                                TerracottaApiClient.clearDynamicPort();
+                                mc.execute(() -> {
+                                    button.setMessage(Component.literal("创建房间"));
+                                    button.active = true;
+                                    mc.setScreen(new StartupScreen(screen, () -> {
+                                        mc.setScreen(screen);
+                                        String playerName = mc.getUser().getName();
+                                        TerracottaApiClient.setScanning(playerName);
+                                    }));
+                                });
+                            } else {
+                                String playerName = mc.getUser().getName();
+                                TerracottaApiClient.setScanning(playerName);
+                                mc.execute(() -> {
+                                    button.setMessage(Component.literal("请求中..."));
+                                    button.active = false;
+                                });
+                            }
+                        });
                 }
             }).bounds(x, y, buttonWidth, 20).build();
             createRoomBtn.visible = false;
@@ -219,4 +241,3 @@ public class InGameMenuHandler {
         }
     }
 }
-

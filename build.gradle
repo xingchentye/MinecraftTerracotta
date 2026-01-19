@@ -11,6 +11,15 @@ group = mod_group_id
 
 allprojects {
     repositories {
+        mavenLocal()
+        maven {
+            name = 'MinecraftForge'
+            url = 'https://maven.minecraftforge.net/'
+        }
+        maven {
+            name = 'FabricMC'
+            url = 'https://maven.fabricmc.net/'
+        }
         mavenCentral()
     }
 }

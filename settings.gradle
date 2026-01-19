@@ -1,6 +1,14 @@
 pluginManagement {
     repositories {
         gradlePluginPortal()
+        maven {
+            name = 'MinecraftForge'
+            url = 'https://maven.minecraftforge.net/'
+        }
+        maven {
+            name = 'FabricMC'
+            url = 'https://maven.fabricmc.net/'
+        }
     }
 }
 
@@ -9,4 +17,4 @@ plugins {
 }
 
 rootProject.name = "MinecraftTerracotta"
-include("core", "neoforge")
+include("core", "neoforge", "forge", "fabric")

@@ -4,6 +4,8 @@ on: [push, pull_request]
 
 jobs:
   build:
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -21,9 +23,10 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Get mod version
-        id: get_version
-        run: echo "version=$(grep '^mod_version=' gradle.properties | cut -d'=' -f2)" >> "$GITHUB_OUTPUT"
+      - name: Get versions
+        id: vars
+        run: |
+          echo "mod_version=$(grep '^mod_version=' gradle.properties | cut -d'=' -f2)" >> "$GITHUB_OUTPUT"
 
       - name: Make gradlew executable
         run: chmod +x ./gradlew
@@ -31,13 +34,23 @@ jobs:
       - name: Build with Gradle
         run: ./gradlew build
 
+      - name: Prepare artifacts
+        run: |
+          mkdir -p dist
+          MOD_VERSION=${{ steps.vars.outputs.mod_version }}
+          BRANCH_NAME=${GITHUB_REF_NAME##*/}
+          FABRIC_JAR=$(ls fabric/build/libs/*.jar | grep -v '\-sources\.jar' | head -n 1)
+          cp "$FABRIC_JAR" "dist/MinecraftTerracotta-v${MOD_VERSION}-${BRANCH_NAME}-fabric.jar"
+          cp forge/build/libs/*-forge.jar "dist/MinecraftTerracotta-v${MOD_VERSION}-${BRANCH_NAME}-forge.jar"
+          cp neoforge/build/libs/*-neoforge.jar "dist/MinecraftTerracotta-v${MOD_VERSION}-${BRANCH_NAME}-neoforge.jar"
+
       - name: Create or update GitHub Release
         if: github.event_name == 'push'
         uses: ncipollo/release-action@v1
         with:
-          tag: v${{ steps.get_version.outputs.version }}
-          name: MinecraftTerracotta v${{ steps.get_version.outputs.version }}
-          artifacts: build/libs/minecraftterracotta-${{ steps.get_version.outputs.version }}.jar
+          tag: ${{ github.ref_name }}
+          name: MinecraftTerracotta ${{ github.ref_name }}
+          artifacts: dist/*.jar
           allowUpdates: true
           replacesArtifacts: true
           token: ${{ secrets.GITHUB_TOKEN }}

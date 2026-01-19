@@ -59,6 +59,7 @@ dependencies {
 }
 
 tasks.named('jar') {
+    archiveFileName = "${mod_name}-v${mod_version}-neoforge.jar"
     from(project(':core').sourceSets.main.output)
 }
 

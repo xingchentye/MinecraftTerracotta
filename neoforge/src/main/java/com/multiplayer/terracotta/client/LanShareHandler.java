@@ -1,30 +1,38 @@
 package com.multiplayer.terracotta.client;
 
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.multiplayer.terracotta.client.gui.StartupScreen;
 import com.multiplayer.terracotta.network.TerracottaApiClient;
+
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.screens.ShareToLanScreen;
-import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.HoverEvent;
-import net.minecraft.network.chat.MutableComponent;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.ScreenEvent;
 
-import java.util.concurrent.CompletableFuture;
-
 @EventBusSubscriber(modid = "minecraftterracotta", value = Dist.CLIENT)
 public class LanShareHandler {
     private static boolean enableTerracotta = false;
     private static final Gson GSON = new Gson();
-    private static String lastShownRoomCode = "";
+    private static final ScheduledExecutorService ROOM_POLL_EXECUTOR = Executors.newSingleThreadScheduledExecutor(r -> {
+        Thread thread = new Thread(r, "Terracotta-Room-Poll");
+        thread.setDaemon(true);
+        return thread;
+    });
 
     @SubscribeEvent
     public static void onScreenInit(ScreenEvent.Init.Post event) {
@@ -32,7 +40,7 @@ public class LanShareHandler {
             int width = screen.width;
             int buttonWidth = 120;
             int x = width - buttonWidth - 5;
-            int y = 5; 
+            int y = 5;
 
             Button toggleBtn = Button.builder(Component.literal("陶瓦联机: " + (enableTerracotta ? "开" : "关")), button -> {
                 enableTerracotta = !enableTerracotta;
@@ -82,7 +90,7 @@ public class LanShareHandler {
 
     private static void startTerracottaHosting(int port) {
         Minecraft mc = Minecraft.getInstance();
-        
+
         if (!TerracottaApiClient.hasDynamicPort()) {
             mc.gui.getChat().addMessage(Component.literal("[Terracotta] 错误：陶瓦联机服务未启动或未连接。请先在多人游戏菜单中启动陶瓦联机。").withStyle(ChatFormatting.RED));
             return;
@@ -105,56 +113,45 @@ public class LanShareHandler {
     }
 
     private static void pollForRoomCode() {
-        CompletableFuture.runAsync(() -> {
+        AtomicInteger attempts = new AtomicInteger();
+        AtomicReference<ScheduledFuture<?>> scheduledRef = new AtomicReference<>();
+        Runnable task = () -> {
             try {
-                for (int i = 0; i < 20; i++) {
-                    String stateJson = TerracottaApiClient.getState().join();
-                    if (stateJson != null) {
-                        try {
-                            JsonObject json = GSON.fromJson(stateJson, JsonObject.class);
-                            if (json.has("state") && "host-ok".equals(json.get("state").getAsString())) {
-                                if (json.has("room")) {
-                                    String roomCode = json.get("room").getAsString();
-                                    Minecraft.getInstance().execute(() -> showRoomCodeInChat(roomCode));
-                                    return;
-                                }
+                int attempt = attempts.incrementAndGet();
+                String stateJson = TerracottaApiClient.getState().join();
+                if (stateJson != null) {
+                    try {
+                        JsonObject json = GSON.fromJson(stateJson, JsonObject.class);
+                        if (json.has("state") && "host-ok".equals(json.get("state").getAsString())) {
+                            if (json.has("room")) {
+                                String roomCode = json.get("room").getAsString();
+                                ClientSetup.handleRoomCodeNotification(roomCode);
+                                cancelScheduled(scheduledRef);
+                                return;
                             }
-                        } catch (Exception ignored) {}
+                        }
+                    } catch (Exception ignored) {
                     }
-                    Thread.sleep(500);
                 }
-                
-                Minecraft.getInstance().execute(() -> 
-                    Minecraft.getInstance().gui.getChat().addMessage(Component.literal("[Terracotta] 房间创建成功，但获取房间号超时。").withStyle(ChatFormatting.YELLOW))
-                );
+                if (attempt >= 20) {
+                    cancelScheduled(scheduledRef);
+                    Minecraft.getInstance().execute(() ->
+                        Minecraft.getInstance().gui.getChat().addMessage(Component.literal("[Terracotta] 房间创建成功，但获取房间号超时。").withStyle(ChatFormatting.YELLOW))
+                    );
+                }
             } catch (Exception e) {
+                cancelScheduled(scheduledRef);
                 e.printStackTrace();
             }
-        });
+        };
+        scheduledRef.set(ROOM_POLL_EXECUTOR.scheduleAtFixedRate(task, 0, 500, TimeUnit.MILLISECONDS));
     }
 
-    private static void showRoomCodeInChat(String roomCode) {
-        Minecraft mc = Minecraft.getInstance();
-
-        if (roomCode != null && roomCode.equals(lastShownRoomCode)) {
-            return;
+    private static void cancelScheduled(AtomicReference<ScheduledFuture<?>> scheduledRef) {
+        ScheduledFuture<?> scheduled = scheduledRef.get();
+        if (scheduled != null) {
+            scheduled.cancel(false);
         }
-        lastShownRoomCode = roomCode;
-
-        MutableComponent msg = Component.literal("[Terracotta] 房间已创建！房间号: ");
-        msg.withStyle(ChatFormatting.GREEN);
-        
-        MutableComponent code = Component.literal(roomCode);
-        code.withStyle(style -> style
-            .withColor(ChatFormatting.AQUA)
-            .withBold(true)
-            .withClickEvent(new ClickEvent(ClickEvent.Action.COPY_TO_CLIPBOARD, roomCode))
-            .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.literal("点击复制")))
-        );
-        
-        msg.append(code);
-        
-        mc.gui.getChat().addMessage(msg);
     }
 }
 

@@ -1,6 +1,10 @@
 # Minecraft Terracotta
 
-Minecraft Terracotta 是一个基于 NeoForge 的 Minecraft 模组，旨在提供简单易用的多人联机解决方案。它集成了基于 Rust 编写的高性能 P2P 后端 (基于 EasyTier)，允许玩家在没有公网 IP 的情况下轻松创建和加入局域网房间。
+![NeoForge 1.21.x](https://img.shields.io/badge/NeoForge-1.21.x-brightgreen)
+![Forge 1.21.x](https://img.shields.io/badge/Forge-1.21.x-brightgreen)
+![Fabric 1.21.x](https://img.shields.io/badge/Fabric-1.21.x-brightgreen)
+
+Minecraft Terracotta 是一个适用于多种加载器的 Minecraft 模组，旨在提供简单易用的多人联机解决方案。它集成了基于 Rust 编写的高性能 P2P 后端 (基于 EasyTier)，允许玩家在没有公网 IP 的情况下轻松创建和加入局域网房间。
 
 ## 📂 项目结构
 

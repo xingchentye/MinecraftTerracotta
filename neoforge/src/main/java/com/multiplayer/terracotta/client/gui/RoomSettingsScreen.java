@@ -2,6 +2,7 @@ package com.multiplayer.terracotta.client.gui;
 
 import com.multiplayer.terracotta.Config;
 import com.multiplayer.terracotta.network.TerracottaApiClient;
+import com.multiplayer.terracotta.logic.ProcessLauncher;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
@@ -82,6 +83,7 @@ public class RoomSettingsScreen extends Screen {
 
         Button disconnectBtn = Button.builder(Component.literal(isHost ? "关闭房间" : "退出联机"), b -> {
             TerracottaApiClient.setIdle();
+            new Thread(ProcessLauncher::stop, "Terracotta-Stopper").start();
             this.onClose();
         }).bounds(centerX - 90, currentY, 88, 20).build();
         this.addRenderableWidget(disconnectBtn);
@@ -94,16 +96,8 @@ public class RoomSettingsScreen extends Screen {
 
     @Override
     public void render(@NotNull GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
-        this.renderBackground(guiGraphics, mouseX, mouseY, partialTick);
-        
-        guiGraphics.drawCenteredString(this.font, this.title, this.width / 2, this.height / 2 - 100, 0xFFFFFF);
-        
         super.render(guiGraphics, mouseX, mouseY, partialTick);
-    }
-
-    @Override
-    public void renderBackground(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
-        super.renderBackground(guiGraphics, mouseX, mouseY, partialTick);
+        guiGraphics.drawCenteredString(this.font, this.title, this.width / 2, this.height / 2 - 100, 0xFFFFFF);
     }
 
     @Override
@@ -111,4 +105,3 @@ public class RoomSettingsScreen extends Screen {
         this.minecraft.setScreen(this.parent);
     }
 }
-
