@@ -18,11 +18,22 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 @Mixin(OpenToLanScreen.class)
 public abstract class ShareToLanScreenMixin extends Screen {
     private static boolean enableTerracotta = false;
     private static final Gson GSON = new Gson();
+    private static final ScheduledExecutorService ROOM_POLL_EXECUTOR = Executors.newSingleThreadScheduledExecutor(r -> {
+        Thread thread = new Thread(r, "Terracotta-Room-Poll");
+        thread.setDaemon(true);
+        return thread;
+    });
 
     protected ShareToLanScreenMixin(Text title) {
         super(title);
@@ -104,34 +115,46 @@ public abstract class ShareToLanScreenMixin extends Screen {
     }
 
     private static void pollForRoomCode() {
-        CompletableFuture.runAsync(() -> {
+        AtomicInteger attempts = new AtomicInteger();
+        AtomicReference<ScheduledFuture<?>> scheduledRef = new AtomicReference<>();
+        Runnable task = () -> {
             try {
-                for (int i = 0; i < 20; i++) {
-                    String stateJson = TerracottaApiClient.getState().join();
-                    if (stateJson != null) {
-                        try {
-                            JsonObject json = GSON.fromJson(stateJson, JsonObject.class);
-                            if (json.has("state") && "host-ok".equals(json.get("state").getAsString())) {
-                                if (json.has("room")) {
-                                    String roomCode = json.get("room").getAsString();
-                                    MinecraftTerracottaClient.handleRoomCodeNotification(roomCode);
-                                    return;
-                                }
+                int attempt = attempts.incrementAndGet();
+                String stateJson = TerracottaApiClient.getState().join();
+                if (stateJson != null) {
+                    try {
+                        JsonObject json = GSON.fromJson(stateJson, JsonObject.class);
+                        if (json.has("state") && "host-ok".equals(json.get("state").getAsString())) {
+                            if (json.has("room")) {
+                                String roomCode = json.get("room").getAsString();
+                                MinecraftTerracottaClient.handleRoomCodeNotification(roomCode);
+                                cancelScheduled(scheduledRef);
+                                return;
                             }
-                        } catch (Exception ignored) {
                         }
+                    } catch (Exception ignored) {
                     }
-                    Thread.sleep(500);
                 }
-
-                MinecraftClient.getInstance().execute(() ->
-                        MinecraftClient.getInstance().inGameHud.getChatHud().addMessage(
-                                Text.literal("[Terracotta] 房间创建成功，但获取房间号超时。").formatted(Formatting.YELLOW)
-                        )
-                );
+                if (attempt >= 20) {
+                    cancelScheduled(scheduledRef);
+                    MinecraftClient.getInstance().execute(() ->
+                            MinecraftClient.getInstance().inGameHud.getChatHud().addMessage(
+                                    Text.literal("[Terracotta] 房间创建成功，但获取房间号超时。").formatted(Formatting.YELLOW)
+                            )
+                    );
+                }
             } catch (Exception e) {
+                cancelScheduled(scheduledRef);
                 e.printStackTrace();
             }
-        });
+        };
+        scheduledRef.set(ROOM_POLL_EXECUTOR.scheduleAtFixedRate(task, 0, 500, TimeUnit.MILLISECONDS));
+    }
+
+    private static void cancelScheduled(AtomicReference<ScheduledFuture<?>> scheduledRef) {
+        ScheduledFuture<?> scheduled = scheduledRef.get();
+        if (scheduled != null) {
+            scheduled.cancel(false);
+        }
     }
 }

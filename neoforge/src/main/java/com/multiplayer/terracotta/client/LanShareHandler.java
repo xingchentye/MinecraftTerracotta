@@ -1,6 +1,12 @@
 package com.multiplayer.terracotta.client;
 
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
@@ -22,6 +28,11 @@ import net.neoforged.neoforge.client.event.ScreenEvent;
 public class LanShareHandler {
     private static boolean enableTerracotta = false;
     private static final Gson GSON = new Gson();
+    private static final ScheduledExecutorService ROOM_POLL_EXECUTOR = Executors.newSingleThreadScheduledExecutor(r -> {
+        Thread thread = new Thread(r, "Terracotta-Room-Poll");
+        thread.setDaemon(true);
+        return thread;
+    });
 
     @SubscribeEvent
     public static void onScreenInit(ScreenEvent.Init.Post event) {
@@ -102,32 +113,45 @@ public class LanShareHandler {
     }
 
     private static void pollForRoomCode() {
-        CompletableFuture.runAsync(() -> {
+        AtomicInteger attempts = new AtomicInteger();
+        AtomicReference<ScheduledFuture<?>> scheduledRef = new AtomicReference<>();
+        Runnable task = () -> {
             try {
-                for (int i = 0; i < 20; i++) {
-                    String stateJson = TerracottaApiClient.getState().join();
-                    if (stateJson != null) {
-                        try {
-                            JsonObject json = GSON.fromJson(stateJson, JsonObject.class);
-                            if (json.has("state") && "host-ok".equals(json.get("state").getAsString())) {
-                                if (json.has("room")) {
-                                    String roomCode = json.get("room").getAsString();
-                                    ClientSetup.handleRoomCodeNotification(roomCode);
-                                    return;
-                                }
+                int attempt = attempts.incrementAndGet();
+                String stateJson = TerracottaApiClient.getState().join();
+                if (stateJson != null) {
+                    try {
+                        JsonObject json = GSON.fromJson(stateJson, JsonObject.class);
+                        if (json.has("state") && "host-ok".equals(json.get("state").getAsString())) {
+                            if (json.has("room")) {
+                                String roomCode = json.get("room").getAsString();
+                                ClientSetup.handleRoomCodeNotification(roomCode);
+                                cancelScheduled(scheduledRef);
+                                return;
                             }
-                        } catch (Exception ignored) {}
+                        }
+                    } catch (Exception ignored) {
                     }
-                    Thread.sleep(500);
                 }
-
-                Minecraft.getInstance().execute(() ->
-                    Minecraft.getInstance().gui.getChat().addMessage(Component.literal("[Terracotta] 房间创建成功，但获取房间号超时。").withStyle(ChatFormatting.YELLOW))
-                );
+                if (attempt >= 20) {
+                    cancelScheduled(scheduledRef);
+                    Minecraft.getInstance().execute(() ->
+                        Minecraft.getInstance().gui.getChat().addMessage(Component.literal("[Terracotta] 房间创建成功，但获取房间号超时。").withStyle(ChatFormatting.YELLOW))
+                    );
+                }
             } catch (Exception e) {
+                cancelScheduled(scheduledRef);
                 e.printStackTrace();
             }
-        });
+        };
+        scheduledRef.set(ROOM_POLL_EXECUTOR.scheduleAtFixedRate(task, 0, 500, TimeUnit.MILLISECONDS));
+    }
+
+    private static void cancelScheduled(AtomicReference<ScheduledFuture<?>> scheduledRef) {
+        ScheduledFuture<?> scheduled = scheduledRef.get();
+        if (scheduled != null) {
+            scheduled.cancel(false);
+        }
     }
 }
 

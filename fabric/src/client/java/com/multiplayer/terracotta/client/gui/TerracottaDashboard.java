@@ -7,6 +7,8 @@ import com.google.gson.JsonObject;
 import com.multiplayer.terracotta.fabric.FabricConfig;
 import com.multiplayer.terracotta.fabric.MinecraftTerracottaClient;
 import com.multiplayer.terracotta.network.TerracottaApiClient;
+import com.multiplayer.terracotta.logic.ProcessLauncher;
+import com.multiplayer.terracotta.logic.ProcessLauncher;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.widget.TextFieldWidget;
@@ -305,6 +307,7 @@ public class TerracottaDashboard extends TerracottaBaseScreen {
                     : Text.translatable("terracotta.dashboard.disconnect_network");
             rightPanel.add(net.minecraft.client.gui.widget.ButtonWidget.builder(closeLabel, button -> {
                 TerracottaApiClient.setIdle();
+                new Thread(ProcessLauncher::stop, "Terracotta-Stopper").start();
                 wasConnected = false;
                 this.isUiConnected = false;
                 this.onClose();
@@ -320,6 +323,7 @@ public class TerracottaDashboard extends TerracottaBaseScreen {
                     Text.translatable("terracotta.common.disconnect"),
                     button -> {
                         TerracottaApiClient.setIdle();
+                        new Thread(ProcessLauncher::stop, "Terracotta-Stopper").start();
                         wasConnected = false;
                         this.isUiConnected = false;
                         this.init(this.client, this.width, this.height);
@@ -361,6 +365,7 @@ public class TerracottaDashboard extends TerracottaBaseScreen {
                 Text.translatable("terracotta.common.disconnect"),
                 b -> {
                     TerracottaApiClient.setIdle();
+                    new Thread(ProcessLauncher::stop, "Terracotta-Stopper").start();
                     wasConnected = false;
                     this.isUiConnected = false;
                     this.onClose();

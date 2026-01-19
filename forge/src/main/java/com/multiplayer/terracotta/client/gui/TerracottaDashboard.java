@@ -7,6 +7,7 @@ import com.google.gson.JsonObject;
 import com.multiplayer.terracotta.ConfigForge;
 import com.multiplayer.terracotta.client.ClientSetupForge;
 import com.multiplayer.terracotta.network.TerracottaApiClient;
+import com.multiplayer.terracotta.logic.ProcessLauncher;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.StringWidget;
@@ -249,6 +250,7 @@ public class TerracottaDashboard extends TerracottaBaseScreen {
 
             rightPanel.addChild(Button.builder(Component.literal(isHost ? "关闭房间" : "退出联机"), button -> {
                 TerracottaApiClient.setIdle();
+                new Thread(ProcessLauncher::stop, "Terracotta-Stopper").start();
                 wasConnected = false;
                 this.isUiConnected = false;
                 this.onClose();
@@ -262,6 +264,7 @@ public class TerracottaDashboard extends TerracottaBaseScreen {
         if (currentMode == ViewMode.FULL) {
             this.layout.addToFooter(Button.builder(Component.literal("断开连接"), button -> {
                 TerracottaApiClient.setIdle();
+                new Thread(ProcessLauncher::stop, "Terracotta-Stopper").start();
                 wasConnected = false;
                 this.isUiConnected = false;
                 this.init(this.minecraft, this.width, this.height);
@@ -293,6 +296,7 @@ public class TerracottaDashboard extends TerracottaBaseScreen {
 
         footerLayout.addChild(Button.builder(Component.literal("断开连接"), b -> {
             TerracottaApiClient.setIdle();
+            new Thread(ProcessLauncher::stop, "Terracotta-Stopper").start();
             wasConnected = false;
             this.isUiConnected = false;
             this.onClose();
@@ -444,4 +448,3 @@ public class TerracottaDashboard extends TerracottaBaseScreen {
         }
     }
 }
-

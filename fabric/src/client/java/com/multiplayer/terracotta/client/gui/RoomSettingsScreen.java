@@ -2,6 +2,7 @@ package com.multiplayer.terracotta.client.gui;
 
 import com.multiplayer.terracotta.fabric.FabricConfig;
 import com.multiplayer.terracotta.network.TerracottaApiClient;
+import com.multiplayer.terracotta.logic.ProcessLauncher;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
@@ -116,6 +117,7 @@ public class RoomSettingsScreen extends Screen {
                 Text.literal(isHost ? "关闭房间" : "退出联机"),
                 button -> {
                     TerracottaApiClient.setIdle();
+                    new Thread(ProcessLauncher::stop, "Terracotta-Stopper").start();
                     this.close();
                 }
         ).dimensions(centerX - 90, currentY, 88, 20).build();

@@ -3,6 +3,12 @@ package com.multiplayer.terracotta.client.gui;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
@@ -24,6 +30,11 @@ import net.minecraft.network.chat.Component;
 
 public class StartupScreen extends TerracottaBaseScreen {
     private static final Logger LOGGER = LoggerFactory.getLogger(StartupScreen.class);
+    private static final ScheduledExecutorService STARTUP_EXECUTOR = Executors.newSingleThreadScheduledExecutor(r -> {
+        Thread thread = new Thread(r, "Terracotta-Startup");
+        thread.setDaemon(true);
+        return thread;
+    });
 
     private String statusText = "初始化中...";
     private String subStatusText = "";
@@ -68,11 +79,7 @@ public class StartupScreen extends TerracottaBaseScreen {
             CompletableFuture.runAsync(() -> {
                 if (TerracottaApiClient.checkHealth().join()) {
                     updateStatus("服务状态正常，正在连接...", 1.0);
-                    try {
-                        Thread.sleep(500);
-                    } catch (InterruptedException ignored) {}
-
-                    this.minecraft.execute(this::onStartupSuccess);
+                    delay(500).thenRun(() -> this.minecraft.execute(this::onStartupSuccess));
                 } else {
                     LOGGER.warn("后台服务无响应，将重新启动...");
                     performFullStartup();
@@ -149,7 +156,7 @@ public class StartupScreen extends TerracottaBaseScreen {
                }
 
                updateStatus("检测到平台: " + os + " (" + arch + ")", 0.15);
-               Thread.sleep(500);
+               delay(500).join();
 
                String downloadUrl = String.format("https://gitee.com/burningtnt/Terracotta/releases/download/%s/%s", version, filename);
                LOGGER.info("下载地址: {}", downloadUrl);
@@ -240,30 +247,15 @@ public class StartupScreen extends TerracottaBaseScreen {
          }, "--hmcl", portFile.toAbsolutePath().toString());
 
          updateStatus("正在等待服务就绪...", 1.0);
-
-         int maxWait = 150;
-         int port = -1;
-
-         for (int i = 0; i < maxWait; i++) {
-             if (isError) return;
-
-             if (Files.exists(portFile)) {
-                 try {
-                     String content = Files.readString(portFile);
-                     com.google.gson.JsonObject json = com.google.gson.JsonParser.parseString(content).getAsJsonObject();
-                     if (json.has("port")) {
-                         port = json.get("port").getAsInt();
-                         break;
-                     }
-                 } catch (Exception e) {
-                 }
-             }
-
-             Thread.sleep(200);
+         int port;
+         try {
+             port = waitForPort(portFile, 150, 200, "未能在限定时间内获取服务端口").get();
+         } catch (InterruptedException e) {
+             Thread.currentThread().interrupt();
+             throw e;
          }
-
-         if (port == -1) {
-             throw new RuntimeException("未能在限定时间内获取服务端口");
+         if (isError || port == -1) {
+             return;
          }
 
         NetworkClient.getInstance().connect("127.0.0.1", port).join();
@@ -272,6 +264,60 @@ public class StartupScreen extends TerracottaBaseScreen {
          isFinished = true;
 
          this.minecraft.execute(this::onStartupSuccess);
+    }
+
+    private CompletableFuture<Void> delay(long millis) {
+        CompletableFuture<Void> future = new CompletableFuture<>();
+        STARTUP_EXECUTOR.schedule(() -> future.complete(null), millis, TimeUnit.MILLISECONDS);
+        return future;
+    }
+
+    private CompletableFuture<Integer> waitForPort(Path portFile, int maxAttempts, long delayMs, String timeoutMessage) {
+        CompletableFuture<Integer> future = new CompletableFuture<>();
+        AtomicInteger attempts = new AtomicInteger();
+        AtomicReference<ScheduledFuture<?>> scheduledRef = new AtomicReference<>();
+        Runnable task = () -> {
+            if (isError) {
+                completeAndCancel(future, scheduledRef, -1);
+                return;
+            }
+            int attempt = attempts.incrementAndGet();
+            int port = readPortFile(portFile);
+            if (port > 0) {
+                completeAndCancel(future, scheduledRef, port);
+                return;
+            }
+            if (attempt >= maxAttempts) {
+                ScheduledFuture<?> scheduled = scheduledRef.get();
+                if (scheduled != null) {
+                    scheduled.cancel(false);
+                }
+                future.completeExceptionally(new RuntimeException(timeoutMessage));
+            }
+        };
+        scheduledRef.set(STARTUP_EXECUTOR.scheduleAtFixedRate(task, 0, delayMs, TimeUnit.MILLISECONDS));
+        return future;
+    }
+
+    private int readPortFile(Path portFile) {
+        if (!Files.exists(portFile)) return -1;
+        try {
+            String content = Files.readString(portFile);
+            com.google.gson.JsonObject json = com.google.gson.JsonParser.parseString(content).getAsJsonObject();
+            if (json.has("port")) {
+                return json.get("port").getAsInt();
+            }
+        } catch (Exception e) {
+        }
+        return -1;
+    }
+
+    private <T> void completeAndCancel(CompletableFuture<T> future, AtomicReference<ScheduledFuture<?>> scheduledRef, T value) {
+        ScheduledFuture<?> scheduled = scheduledRef.get();
+        if (scheduled != null) {
+            scheduled.cancel(false);
+        }
+        future.complete(value);
     }
 
     private void onStartupSuccess() {
@@ -290,7 +336,7 @@ public class StartupScreen extends TerracottaBaseScreen {
 
     private void cancelAndClose() {
         if (!keepProcessAlive && isFreshLaunch) {
-            ProcessLauncher.stop();
+            new Thread(ProcessLauncher::stop, "Terracotta-Stopper").start();
         }
         this.onClose();
     }
@@ -299,7 +345,7 @@ public class StartupScreen extends TerracottaBaseScreen {
     public void removed() {
         super.removed();
         if (!keepProcessAlive && isFreshLaunch) {
-            ProcessLauncher.stop();
+            new Thread(ProcessLauncher::stop, "Terracotta-Stopper").start();
         }
     }
 

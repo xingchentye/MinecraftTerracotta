@@ -117,6 +117,7 @@ public class ProcessLauncher {
 
     public static void stop() {
         stopping = true;
+        TerracottaApiClient.clearDynamicPort();
         try {
             TerracottaApiClient.panic(false).join();
         } catch (Exception e) {
@@ -126,16 +127,7 @@ public class ProcessLauncher {
         if (process != null && process.isAlive()) {
             LOGGER.info("正在停止陶瓦联机进程...");
             process.destroy();
-            try {
-                Thread.sleep(1000);
-                if (process.isAlive()) {
-                    process.destroyForcibly();
-                }
-            } catch (InterruptedException e) {
-                process.destroyForcibly();
-            }
         }
-        TerracottaApiClient.clearDynamicPort();
         status = ProcessStatus.STOPPED;
     }
 
@@ -163,25 +155,16 @@ public class ProcessLauncher {
                 ph.destroy();
             }
 
-            long start = System.currentTimeMillis();
-            boolean allDead = false;
-            while (System.currentTimeMillis() - start < 3000) {
-                allDead = toKill.stream().allMatch(ph -> !ph.isAlive());
-                if (allDead) break;
-                try {
-                    Thread.sleep(100);
-                } catch (InterruptedException e) {
-                    break;
+            toKill.forEach(ph -> {
+                if (ph.isAlive()) {
+                    try {
+                        LOGGER.info("正在终止进程 PID: {}", ph.pid());
+                        ph.destroy();
+                    } catch (Exception e) {
+                    }
                 }
-            }
-
-            if (!allDead) {
-                LOGGER.warn("部分进程未能正常退出，尝试强制终止...");
-                toKill.stream().filter(ProcessHandle::isAlive).forEach(ProcessHandle::destroyForcibly);
-            }
-            
-            LOGGER.info("残留进程清理完成");
-
+            });
+            LOGGER.info("残留进程终止指令已发送");
         } catch (Exception e) {
             LOGGER.warn("清理残留进程时发生错误", e);
         }
@@ -194,4 +177,3 @@ public class ProcessLauncher {
         CRASHED
     }
 }
-

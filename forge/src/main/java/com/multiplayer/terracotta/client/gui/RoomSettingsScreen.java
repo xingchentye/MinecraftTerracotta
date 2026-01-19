@@ -2,6 +2,7 @@ package com.multiplayer.terracotta.client.gui;
 
 import com.multiplayer.terracotta.ConfigForge;
 import com.multiplayer.terracotta.network.TerracottaApiClient;
+import com.multiplayer.terracotta.logic.ProcessLauncher;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
@@ -82,6 +83,7 @@ public class RoomSettingsScreen extends Screen {
 
         Button disconnectBtn = Button.builder(Component.literal(isHost ? "关闭房间" : "退出联机"), b -> {
             TerracottaApiClient.setIdle();
+            new Thread(ProcessLauncher::stop, "Terracotta-Stopper").start();
             this.onClose();
         }).bounds(centerX - 90, currentY, 88, 20).build();
         this.addRenderableWidget(disconnectBtn);
