@@ -67,7 +67,7 @@ public class InGameMenuHandler {
                     mc.setScreen(new StartupScreen(screen, () -> {
                         mc.setScreen(screen);
                         String playerName = mc.getUser().getName();
-                        TerracottaApiClient.setScanning(playerName);
+                        TerracottaApiClient.startHosting(0, playerName);
                     }));
                 } else {
                     button.active = false;
@@ -82,12 +82,12 @@ public class InGameMenuHandler {
                                     mc.setScreen(new StartupScreen(screen, () -> {
                                         mc.setScreen(screen);
                                         String playerName = mc.getUser().getName();
-                                        TerracottaApiClient.setScanning(playerName);
+                                        TerracottaApiClient.startHosting(0, playerName);
                                     }));
                                 });
                             } else {
                                 String playerName = mc.getUser().getName();
-                                TerracottaApiClient.setScanning(playerName);
+                                TerracottaApiClient.startHosting(0, playerName);
                                 mc.execute(() -> {
                                     button.setMessage(Component.literal("请求中..."));
                                     button.active = false;
@@ -177,19 +177,23 @@ public class InGameMenuHandler {
         private void updateState() {
             TerracottaApiClient.getState().whenComplete((stateJson, ex) -> {
                 if (ex != null || stateJson == null) {
-                    TerracottaApiClient.clearDynamicPort();
-                    Minecraft.getInstance().execute(() -> {
-                         infoBtn.visible = false;
-                         settingsBtn.visible = false;
-                         
-                         if (Minecraft.getInstance().getSingleplayerServer() != null 
-                             && Minecraft.getInstance().getSingleplayerServer().isPublished()) {
-                             createRoomBtn.visible = true;
-                             createRoomBtn.setMessage(Component.literal("创建房间"));
-                             createRoomBtn.active = true;
-                         } else {
-                             createRoomBtn.visible = false;
-                         }
+                    TerracottaApiClient.checkHealth().thenAccept(healthy -> {
+                        if (!healthy) {
+                            TerracottaApiClient.clearDynamicPort();
+                        }
+                        Minecraft.getInstance().execute(() -> {
+                            infoBtn.visible = false;
+                            settingsBtn.visible = false;
+                            
+                            if (Minecraft.getInstance().getSingleplayerServer() != null 
+                                && Minecraft.getInstance().getSingleplayerServer().isPublished()) {
+                                createRoomBtn.visible = true;
+                                createRoomBtn.setMessage(Component.literal("创建房间"));
+                                createRoomBtn.active = true;
+                            } else {
+                                createRoomBtn.visible = false;
+                            }
+                        });
                     });
                     return;
                 }

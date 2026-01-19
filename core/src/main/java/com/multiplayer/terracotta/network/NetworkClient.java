@@ -70,7 +70,11 @@ public class NetworkClient {
                         LOGGER.info("连接被远程主机关闭");
                         BufferPool.release(attachment);
                         close();
-                        TerracottaApiClient.clearDynamicPort();
+                        TerracottaApiClient.checkHealth().thenAccept(ok -> {
+                            if (!ok) {
+                                TerracottaApiClient.clearDynamicPort();
+                            }
+                        });
                         return;
                     }
                     
@@ -91,6 +95,11 @@ public class NetworkClient {
                     LOGGER.error("读取数据异常", exc);
                     BufferPool.release(attachment);
                     close();
+                    TerracottaApiClient.checkHealth().thenAccept(ok -> {
+                        if (!ok) {
+                            TerracottaApiClient.clearDynamicPort();
+                        }
+                    });
                 }
             });
         }
