@@ -55,12 +55,22 @@ configurations {
 }
 
 dependencies {
-    implementation project(':core')
+    implementation project(':ender_core')
+    implementation "org.java-websocket:Java-WebSocket:1.5.4"
+    implementation "org.apache.commons:commons-compress:1.26.0"
+    localRuntime "org.java-websocket:Java-WebSocket:1.5.4"
+    localRuntime "org.apache.commons:commons-compress:1.26.0"
 }
 
 tasks.named('jar') {
     archiveFileName = "${mod_name}-v${mod_version}-neoforge.jar"
-    from(project(':core').sourceSets.main.output)
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    from(project(':ender_core').sourceSets.main.output)
+    from({
+        configurations.runtimeClasspath.files.findAll {
+            it.name.contains("Java-WebSocket")
+        }.collect { it.isDirectory() ? it : zipTree(it) }
+    })
 }
 
 publishing {

@@ -1,0 +1,1559 @@
+package com.multiplayer.ender.client.gui;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.function.Consumer;
+
+import com.google.gson.Gson;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.multiplayer.ender.ConfigForge;
+import com.multiplayer.ender.client.ClientSetupForge;
+import com.multiplayer.ender.logic.ProcessLauncher;
+import com.multiplayer.ender.network.EnderApiClient;
+
+import net.minecraft.client.gui.components.AbstractWidget;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.components.StringWidget;
+import net.minecraft.client.gui.layouts.AbstractLayout;
+import net.minecraft.client.gui.layouts.Layout;
+import net.minecraft.client.gui.layouts.LayoutElement;
+import net.minecraft.client.gui.layouts.LinearLayout;
+import net.minecraft.client.gui.screens.ConnectScreen;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.worldselection.EditGameRulesScreen;
+import net.minecraft.client.multiplayer.ServerData;
+import net.minecraft.client.multiplayer.resolver.ServerAddress;
+import net.minecraft.client.server.IntegratedServer;
+import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.level.GameType;
+import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.GameRules;
+import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.GameRules;
+import net.minecraft.world.level.border.WorldBorder;
+import net.minecraft.client.gui.components.ObjectSelectionList;
+
+public class EnderDashboard extends EnderBaseScreen {
+    private String backendState = Component.translatable("ender.dashboard.status.fetching").getString();
+    private long lastStateCheck = 0;
+    private static final Gson GSON = new Gson();
+    private static String lastClipboard = "";
+    private static boolean wasConnected = false;
+    private boolean isUiConnected = false;
+    private static JsonObject lastStateJson = null;
+
+    private boolean showPlayerList = true;
+    private boolean showServerSettings = false;
+
+    private String tempPath;
+    private boolean tempAutoUpdate;
+    private boolean tempAutoStart;
+    private long lastRoomSync = 0;
+    private int lastPingMs = -1;
+    private String networkQualityLabel = "良好";
+    private String roomName = "未命名房间";
+    private String roomRemark = "";
+    private int currentPlayers = 0;
+    private int maxPlayers = 0;
+    private String visitorPermission = "可交互";
+    private boolean whitelistEnabled = false;
+    private JsonArray whitelist = new JsonArray();
+    private JsonArray blacklist = new JsonArray();
+    private JsonArray muteList = new JsonArray();
+    private JsonArray operationLogs = new JsonArray();
+    private boolean allowCheats = false;
+    private int spawnProtection = 16;
+    private boolean keepInventory = false;
+    private boolean fireSpread = true;
+    private boolean mobSpawning = true;
+    private String timeControl = "cycle";
+    private boolean weatherLock = false;
+    private int respawnX = 0;
+    private int respawnY = 0;
+    private int respawnZ = 0;
+    private int worldBorderCenterX = 0;
+    private int worldBorderCenterZ = 0;
+    private int worldBorderRadius = 0;
+    private boolean autoReconnect = true;
+    private int reconnectRetries = 3;
+    private boolean hostMigration = false;
+    private String backendVersion = "当前";
+    private String updatePolicy = "立即";
+    private String logLevel = "INFO";
+    private int cpuLimit = 0;
+    private int memoryLimit = 0;
+    private JsonArray backendVersions = new JsonArray();
+    private boolean roomStateDirty = false;
+    private long lastPushTime = 0;
+    private final List<AbstractWidget> roomPageWidgets = new ArrayList<>();
+    private final List<Button> roomPageButtons = new ArrayList<>();
+    private RoomPagePanel roomPagePanel;
+
+    public enum ViewMode {
+        FULL,
+        INGAME_INFO,
+        INGAME_SETTINGS
+    }
+
+    private class PlayerListWrapperWidget extends AbstractWidget {
+        private final PlayerListScrollWidget list;
+        
+        public PlayerListWrapperWidget(PlayerListScrollWidget list, int width, int height) {
+            super(0, 0, width, height, Component.empty());
+            this.list = list;
+        }
+        
+        @Override
+        public void renderWidget(net.minecraft.client.gui.GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+            this.list.updateWidgetSize(this.width, this.height, this.getY(), this.getY() + this.height, this.getX());
+            this.list.render(guiGraphics, mouseX, mouseY, partialTick);
+        }
+        
+        @Override
+        public boolean mouseClicked(double mouseX, double mouseY, int button) {
+            return this.list.mouseClicked(mouseX, mouseY, button);
+        }
+        
+        @Override
+        public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
+             return this.list.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount);
+        }
+        
+        @Override
+        public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
+            return this.list.mouseDragged(mouseX, mouseY, button, deltaX, deltaY);
+        }
+        
+        @Override
+        protected void updateWidgetNarration(net.minecraft.client.gui.narration.NarrationElementOutput narrationElementOutput) {}
+    }
+
+    private class PlayerListScrollWidget extends ObjectSelectionList<PlayerListScrollWidget.Entry> {
+        public PlayerListScrollWidget(net.minecraft.client.Minecraft minecraft, int width, int height, int top, int bottom) {
+            super(minecraft, width, height, top, 24);
+        }
+
+        public void updateWidgetSize(int width, int height, int top, int bottom, int left) {
+            this.width = width;
+            this.height = height;
+            this.setX(left);
+            this.setY(top);
+        }
+        
+        public void addItem(String name, String type, Button.OnPress onRemove) {
+            this.addEntry(new Entry(name, type, onRemove));
+        }
+        
+        @Override
+        public int getRowWidth() {
+            return 300;
+        }
+
+        @Override
+        protected int getScrollbarPosition() {
+            return this.getX() + this.width - 6;
+        }
+
+        public class Entry extends ObjectSelectionList.Entry<Entry> {
+             private final String name;
+             private final String type;
+             private final Button removeBtn;
+
+             public Entry(String name, String type, Button.OnPress onRemove) {
+                 this.name = name;
+                 this.type = type;
+                 this.removeBtn = Button.builder(Component.literal("移除"), onRemove).width(40).build();
+             }
+
+             @Override
+             public void render(net.minecraft.client.gui.GuiGraphics guiGraphics, int index, int y, int x, int entryWidth, int entryHeight, int mouseX, int mouseY, boolean hovered, float partialTick) {
+                 guiGraphics.drawString(EnderDashboard.this.font, name, x + 10, y + (entryHeight - 8) / 2, 0xFFFFFF);
+                 guiGraphics.drawString(EnderDashboard.this.font, Component.literal(type).withStyle(net.minecraft.ChatFormatting.GRAY), x + 140, y + (entryHeight - 8) / 2, 0xFFFFFF);
+                 
+                 this.removeBtn.setX(x + 240);
+                 this.removeBtn.setY(y + (entryHeight - 20) / 2);
+                 this.removeBtn.render(guiGraphics, mouseX, mouseY, partialTick);
+             }
+
+             @Override
+             public boolean mouseClicked(double mouseX, double mouseY, int button) {
+                 if (this.removeBtn.mouseClicked(mouseX, mouseY, button)) {
+                     return true;
+                 }
+                 return false;
+             }
+             
+             @Override
+             public Component getNarration() {
+                 return Component.literal(name);
+             }
+        }
+    }
+
+    public enum RoomPage {
+        OVERVIEW,
+        PERMISSIONS,
+        RULES,
+        WORLD,
+        NETWORK,
+        BACKEND
+    }
+
+    private ViewMode currentMode = ViewMode.FULL;
+    private RoomPage currentRoomPage = RoomPage.OVERVIEW;
+
+    public EnderDashboard(Screen parent) {
+        this(parent, ViewMode.FULL);
+    }
+
+    public EnderDashboard(Screen parent, ViewMode mode) {
+        super(Component.literal("末影联机中心"), parent);
+        this.currentMode = mode;
+        this.tempPath = ConfigForge.EXTERNAL_ender_PATH.get();
+        this.tempAutoUpdate = ConfigForge.AUTO_UPDATE.get();
+        this.tempAutoStart = ConfigForge.AUTO_START_BACKEND.get();
+    }
+
+    public void setConnected(boolean connected) {
+        wasConnected = connected;
+    }
+
+    private void checkClipboardAndAutoJoin() {
+        if (wasConnected) return;
+        try {
+            String clipboard = this.minecraft.keyboardHandler.getClipboard();
+            if (clipboard != null) {
+                clipboard = clipboard.trim();
+                if (!clipboard.isEmpty() && !clipboard.equals(lastClipboard)) {
+                    // Match standard 4-part room code: XXXX-XXXX-XXXX-XXXX
+                    if (clipboard.matches("^[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$")) {
+                        lastClipboard = clipboard;
+                        String finalClipboard = clipboard;
+                        this.minecraft.execute(() -> {
+                            this.minecraft.setScreen(new JoinScreen(this, finalClipboard));
+                        });
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
+    @Override
+    protected void initContent() {
+        if (lastStateJson != null) {
+            if (lastStateJson.has("state")) {
+                String s = lastStateJson.get("state").getAsString();
+                boolean connected = "host-ok".equals(s) || "guest-ok".equals(s);
+                if (wasConnected != connected) {
+                    wasConnected = connected;
+                }
+            } else if (lastStateJson.has("status") && "IDLE".equals(lastStateJson.get("status").getAsString())) {
+                wasConnected = false;
+            }
+        }
+
+        if (!wasConnected) {
+            checkStateImmediately();
+        }
+
+        if (wasConnected) {
+            initConnectedContent();
+        } else {
+            initIdleContent();
+        }
+    }
+
+    private void checkStateImmediately() {
+        if (!EnderApiClient.hasDynamicPort()) return;
+
+        EnderApiClient.getState().thenAccept(stateJson -> {
+            if (stateJson != null) {
+                try {
+                    JsonObject json = GSON.fromJson(stateJson, JsonObject.class);
+                    if (json.has("state")) {
+                        String state = json.get("state").getAsString();
+                        boolean isConnected = "host-ok".equals(state) || "guest-ok".equals(state);
+
+                        if (wasConnected != isConnected || this.isUiConnected != isConnected) {
+                            wasConnected = isConnected;
+                            lastStateJson = json;
+                            this.minecraft.execute(this::rebuildWidgets);
+                        } else if (isConnected && lastStateJson == null) {
+                            lastStateJson = json;
+                            this.minecraft.execute(this::rebuildWidgets);
+                        }
+                    } else if (json.has("status") && "IDLE".equals(json.get("status").getAsString())) {
+                        if (wasConnected) {
+                            wasConnected = false;
+                            this.isUiConnected = false;
+                            lastStateJson = null;
+                            this.minecraft.execute(this::rebuildWidgets);
+                        }
+                    }
+                } catch (Exception ignored) {}
+            }
+        });
+    }
+
+    public void updateFromState(JsonObject json) {
+        if (json == null) return;
+        lastStateJson = json;
+        if (json.has("state")) {
+            String state = json.get("state").getAsString();
+            boolean isConnected = "host-ok".equals(state) || "guest-ok".equals(state);
+            wasConnected = isConnected;
+            this.isUiConnected = isConnected;
+        }
+        this.rebuildWidgets();
+    }
+
+    private void initConnectedContent() {
+        this.isUiConnected = true;
+
+        boolean isHost = false;
+        boolean isStarting = false;
+        
+        if (lastStateJson != null) {
+            if (lastStateJson.has("state")) {
+                String state = lastStateJson.get("state").getAsString();
+                isHost = "host-ok".equals(state);
+                isStarting = "host-starting".equals(state) || "guest-starting".equals(state);
+            }
+        }
+        
+        if (isStarting) {
+            LinearLayout loadingLayout = LinearLayout.vertical().spacing(10);
+            loadingLayout.defaultCellSetting().alignHorizontallyCenter();
+            loadingLayout.addChild(new StringWidget(Component.translatable("ender.host.status.requesting"), this.font));
+            this.layout.addToContents(loadingLayout);
+            return;
+        }
+
+        if (!isHost) {
+            initGuestConnectedContent();
+            return;
+        }
+
+        initRoomManagementContent();
+        if (currentMode == ViewMode.FULL) {
+            this.layout.addToFooter(Button.builder(Component.literal("断开连接"), button -> {
+                EnderApiClient.setIdle();
+                new Thread(ProcessLauncher::stop, "Ender-Stopper").start();
+                wasConnected = false;
+                this.isUiConnected = false;
+                this.rebuildWidgets();
+            }).width(200).build());
+        } else {
+            this.layout.addToFooter(Button.builder(Component.literal("返回"), button -> {
+                this.onClose();
+            }).width(200).build());
+        }
+    }
+
+    private void initGuestConnectedContent() {
+        LinearLayout content = LinearLayout.vertical().spacing(10);
+        content.defaultCellSetting().alignHorizontallyCenter();
+
+        content.addChild(new StringWidget(Component.literal(" 房间玩家列表 "), this.font));
+
+        addPlayerListToLayout(content);
+
+        this.layout.addToContents(content);
+
+        LinearLayout footerLayout = LinearLayout.horizontal().spacing(10);
+
+        footerLayout.addChild(Button.builder(Component.literal("断开连接"), b -> {
+            EnderApiClient.setIdle();
+            new Thread(ProcessLauncher::stop, "Ender-Stopper").start();
+            wasConnected = false;
+            this.isUiConnected = false;
+            this.onClose();
+        }).width(80).build());
+
+        footerLayout.addChild(Button.builder(Component.literal("返回"), b -> this.onClose()).width(80).build());
+
+        this.layout.addToFooter(footerLayout);
+    }
+
+    private void addPlayerListToLayout(LinearLayout layout) {
+        if (lastStateJson != null) {
+            if (lastStateJson.has("profiles")) {
+                try {
+                    JsonArray profiles = lastStateJson.getAsJsonArray("profiles");
+                    if (profiles.size() > 0) {
+                        layout.addChild(new StringWidget(Component.literal(" 当前玩家 (" + profiles.size() + ") "), this.font));
+                        for (JsonElement p : profiles) {
+                            JsonObject profile = p.getAsJsonObject();
+                            String name = profile.get("name").getAsString();
+                            String kind = profile.has("kind") ? profile.get("kind").getAsString() : "";
+                            String display = name;
+                            if ("HOST".equals(kind)) {
+                                display += " [房主]";
+                            }
+                            layout.addChild(new StringWidget(Component.literal(display), this.font));
+                        }
+                    }
+                } catch (Exception ignored) {}
+            } else if (lastStateJson.has("players")) {
+                try {
+                    JsonArray players = lastStateJson.getAsJsonArray("players");
+                    if (players.size() > 0) {
+                        layout.addChild(new StringWidget(Component.literal(" 当前玩家 (" + players.size() + ") "), this.font));
+                        for (JsonElement p : players) {
+                            String pName = p.getAsString();
+                            layout.addChild(new StringWidget(Component.literal(pName), this.font));
+                        }
+                    }
+                } catch (Exception ignored) {}
+            }
+        }
+    }
+
+    private void saveConfig() {
+        ConfigForge.EXTERNAL_ender_PATH.set(this.tempPath);
+        ConfigForge.AUTO_UPDATE.set(this.tempAutoUpdate);
+        ConfigForge.AUTO_START_BACKEND.set(this.tempAutoStart);
+        ConfigForge.CLIENT_SPEC.save();
+    }
+
+    private void connectToServer(String connectUrl) {
+        try {
+            String[] parts = connectUrl.split(":");
+            String host = parts[0];
+            int port = 25565;
+            if (parts.length > 1) {
+                port = Integer.parseInt(parts[1]);
+            }
+            ServerAddress serverAddress = new ServerAddress(host, port);
+            ConnectScreen.startConnecting(this.parent, this.minecraft, serverAddress, new ServerData("Ender Server", connectUrl, ServerData.Type.OTHER), false, null);
+        } catch (Exception e) {
+        }
+    }
+
+    private void initIdleContent() {
+        this.isUiConnected = false;
+        LinearLayout contentLayout = LinearLayout.vertical().spacing(15);
+
+        contentLayout.addChild(Button.builder(Component.literal("加入房间"), button -> {
+            if (EnderApiClient.hasDynamicPort()) {
+                this.minecraft.setScreen(new JoinScreen(this));
+            } else {
+                this.minecraft.setScreen(new StartupScreen(this.parent));
+            }
+        }).width(200).build());
+
+        contentLayout.addChild(Button.builder(Component.literal("设置"), button -> {
+            this.minecraft.setScreen(new EnderConfigScreen(this));
+        }).width(200).build());
+
+        this.layout.addToContents(contentLayout);
+
+        this.layout.addToFooter(Button.builder(Component.literal("退出"), button -> {
+            this.onClose();
+        }).width(200).build());
+    }
+
+    @Override
+    public void tick() {
+        super.tick();
+
+        long now = System.currentTimeMillis();
+        if (now - lastStateCheck > 1000) {
+            lastStateCheck = now;
+
+            if (EnderApiClient.hasDynamicPort()) {
+                long startedAt = System.currentTimeMillis();
+                EnderApiClient.getState().thenAccept(stateJson -> updateBackendState(stateJson, startedAt));
+            } else {
+                this.backendState = Component.translatable("ender.state.not_started").getString();
+            }
+        }
+
+        if (!wasConnected) {
+            checkClipboardAndAutoJoin();
+        }
+
+        if (isHostConnected() && now - lastRoomSync > 500) {
+            lastRoomSync = now;
+            if (roomStateDirty) {
+                EnderApiClient.updateRoomManagementState(buildRoomManagementStateJson().toString());
+                roomStateDirty = false;
+                lastPushTime = System.currentTimeMillis();
+                applyRoomManagementStateToServer();
+            } else if (System.currentTimeMillis() - lastPushTime > 2000) {
+                EnderApiClient.getRoomManagementState().thenAccept(this::updateRoomManagementStateFromString);
+            }
+        }
+    }
+
+    @Override
+    public void render(net.minecraft.client.gui.GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+        super.render(guiGraphics, mouseX, mouseY, partialTick);
+
+        if (this.currentMode == ViewMode.FULL || this.currentMode == ViewMode.INGAME_INFO) {
+            int textY = this.layout.getHeaderHeight() + 5;
+            guiGraphics.drawCenteredString(this.font, Component.translatable("ender.dashboard.status.fetching").getString().equals(this.backendState) ?
+                this.backendState : Component.translatable("ender.dashboard.status_prefix").append(this.backendState).getString(), this.width / 2, textY, 0xAAAAAA);
+        }
+    }
+
+    private void updateBackendState(String stateJson, long startedAt) {
+        if (stateJson != null) {
+            try {
+                JsonObject json = GSON.fromJson(stateJson, JsonObject.class);
+                String state = "";
+                if (json.has("state")) {
+                    state = json.get("state").getAsString();
+                }
+                boolean isConnected = "host-ok".equals(state) || "guest-ok".equals(state);
+
+                boolean needsInit = wasConnected != isConnected || this.isUiConnected != isConnected;
+                if (isConnected) {
+                    lastStateJson = json;
+                } else {
+                    lastStateJson = null;
+                }
+                if (needsInit) {
+                    wasConnected = isConnected;
+                    if (this.minecraft != null) {
+                        this.minecraft.execute(() -> this.init(this.minecraft, this.width, this.height));
+                    }
+                }
+
+                String displayKey = "ender.state.idle";
+
+                switch (state) {
+                    case "idle": displayKey = "ender.state.idle"; break;
+                    case "host-starting": displayKey = "ender.state.host_starting"; break;
+                    case "host-scanning": displayKey = "ender.state.host_scanning"; break;
+                    case "host-ok": displayKey = "ender.state.connected"; break;
+                    case "guest-starting": displayKey = "ender.state.guest_starting"; break;
+                    case "guest-connecting": displayKey = "ender.state.guest_connecting"; break;
+                    case "guest-ok": displayKey = "ender.state.connected"; break;
+                    case "waiting": displayKey = "ender.state.waiting"; break;
+                    default: displayKey = null; break;
+                }
+
+                if (displayKey != null) {
+                    this.backendState = Component.translatable(displayKey).getString();
+                } else {
+                    this.backendState = state;
+                }
+                if (isConnected) {
+                    long cost = Math.max(0, System.currentTimeMillis() - startedAt);
+                    this.lastPingMs = (int) cost;
+                    if (cost <= 80) {
+                        this.networkQualityLabel = "优秀";
+                    } else if (cost <= 150) {
+                        this.networkQualityLabel = "良好";
+                    } else if (cost <= 250) {
+                        this.networkQualityLabel = "一般";
+                    } else {
+                        this.networkQualityLabel = "较差";
+                    }
+                }
+            } catch (Exception ignored) {}
+        }
+    }
+
+    private boolean isHostConnected() {
+        if (lastStateJson == null) {
+            return false;
+        }
+        if (lastStateJson.has("state")) {
+            return "host-ok".equals(lastStateJson.get("state").getAsString());
+        }
+        return false;
+    }
+
+    private void updateRoomManagementStateFromString(String stateJson) {
+        if (stateJson == null || roomStateDirty) {
+            return;
+        }
+        try {
+            JsonObject json = GSON.fromJson(stateJson, JsonObject.class);
+            if (json == null) {
+                return;
+            }
+            boolean changed = mergeRoomManagementState(json);
+            if (changed) {
+                applyRoomManagementStateToServer();
+            }
+            if (changed && this.minecraft != null) {
+                this.minecraft.execute(() -> this.init(this.minecraft, this.width, this.height));
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
+    private boolean mergeRoomManagementState(JsonObject json) {
+        boolean changed = false;
+        if (json.has("room_name")) {
+            String v = json.get("room_name").getAsString();
+            if (!v.equals(this.roomName)) {
+                this.roomName = v;
+                changed = true;
+            }
+        }
+        if (json.has("room_remark")) {
+            String v = json.get("room_remark").getAsString();
+            if (!v.equals(this.roomRemark)) {
+                this.roomRemark = v;
+                changed = true;
+            }
+        }
+        if (json.has("visitor_permission")) {
+            String v = json.get("visitor_permission").getAsString();
+            if (!v.equals(this.visitorPermission)) {
+                this.visitorPermission = v;
+                changed = true;
+            }
+        }
+        if (json.has("whitelist_enabled")) {
+            boolean v = json.get("whitelist_enabled").getAsBoolean();
+            if (v != this.whitelistEnabled) {
+                this.whitelistEnabled = v;
+                changed = true;
+            }
+        }
+        if (json.has("whitelist")) {
+            JsonArray v = json.getAsJsonArray("whitelist");
+            this.whitelist = v == null ? new JsonArray() : v;
+            changed = true;
+        }
+        if (json.has("blacklist")) {
+            JsonArray v = json.getAsJsonArray("blacklist");
+            this.blacklist = v == null ? new JsonArray() : v;
+            changed = true;
+        }
+        if (json.has("mute_list")) {
+            JsonArray v = json.getAsJsonArray("mute_list");
+            this.muteList = v == null ? new JsonArray() : v;
+            changed = true;
+        }
+        if (json.has("operation_logs")) {
+            JsonArray v = json.getAsJsonArray("operation_logs");
+            this.operationLogs = v == null ? new JsonArray() : v;
+            changed = true;
+        }
+        if (json.has("allow_cheats")) {
+            this.allowCheats = json.get("allow_cheats").getAsBoolean();
+            changed = true;
+        }
+        if (json.has("allow_pvp")) {
+            this.pvpAllowed = json.get("allow_pvp").getAsBoolean();
+            changed = true;
+        }
+        if (json.has("spawn_protection")) {
+            this.spawnProtection = json.get("spawn_protection").getAsInt();
+            changed = true;
+        }
+        if (json.has("keep_inventory")) {
+            this.keepInventory = json.get("keep_inventory").getAsBoolean();
+            changed = true;
+        }
+        if (json.has("fire_spread")) {
+            this.fireSpread = json.get("fire_spread").getAsBoolean();
+            changed = true;
+        }
+        if (json.has("mob_spawning")) {
+            this.mobSpawning = json.get("mob_spawning").getAsBoolean();
+            changed = true;
+        }
+        if (json.has("time_lock")) {
+            this.timeControl = json.get("time_lock").getAsString();
+            changed = true;
+        }
+        if (json.has("weather_lock")) {
+            this.weatherLock = json.get("weather_lock").getAsBoolean();
+            changed = true;
+        }
+        if (json.has("respawn_x")) {
+            this.respawnX = json.get("respawn_x").getAsInt();
+            changed = true;
+        }
+        if (json.has("respawn_y")) {
+            this.respawnY = json.get("respawn_y").getAsInt();
+            changed = true;
+        }
+        if (json.has("respawn_z")) {
+            this.respawnZ = json.get("respawn_z").getAsInt();
+            changed = true;
+        }
+        if (json.has("world_border_center_x")) {
+            this.worldBorderCenterX = json.get("world_border_center_x").getAsInt();
+            changed = true;
+        }
+        if (json.has("world_border_center_z")) {
+            this.worldBorderCenterZ = json.get("world_border_center_z").getAsInt();
+            changed = true;
+        }
+        if (json.has("world_border_radius")) {
+            this.worldBorderRadius = json.get("world_border_radius").getAsInt();
+            changed = true;
+        }
+        if (json.has("auto_reconnect")) {
+            this.autoReconnect = json.get("auto_reconnect").getAsBoolean();
+            changed = true;
+        }
+        if (json.has("reconnect_retries")) {
+            this.reconnectRetries = json.get("reconnect_retries").getAsInt();
+            changed = true;
+        }
+        if (json.has("host_migration")) {
+            this.hostMigration = json.get("host_migration").getAsBoolean();
+            changed = true;
+        }
+        if (json.has("backend_version")) {
+            this.backendVersion = json.get("backend_version").getAsString();
+            changed = true;
+        }
+        if (json.has("update_policy")) {
+            this.updatePolicy = json.get("update_policy").getAsString();
+            changed = true;
+        }
+        if (json.has("log_level")) {
+            this.logLevel = json.get("log_level").getAsString();
+            changed = true;
+        }
+        if (json.has("cpu_limit")) {
+            this.cpuLimit = json.get("cpu_limit").getAsInt();
+            changed = true;
+        }
+        if (json.has("memory_limit")) {
+            this.memoryLimit = json.get("memory_limit").getAsInt();
+            changed = true;
+        }
+        if (json.has("backend_versions")) {
+            JsonArray v = json.getAsJsonArray("backend_versions");
+            this.backendVersions = v == null ? new JsonArray() : v;
+            changed = true;
+        }
+        return changed;
+    }
+
+    private JsonObject buildRoomManagementStateJson() {
+        JsonObject json = new JsonObject();
+        json.addProperty("room_name", roomName);
+        json.addProperty("room_remark", roomRemark);
+        json.addProperty("visitor_permission", visitorPermission);
+        json.addProperty("whitelist_enabled", whitelistEnabled);
+        json.add("whitelist", whitelist == null ? new JsonArray() : whitelist);
+        json.add("blacklist", blacklist == null ? new JsonArray() : blacklist);
+        json.add("mute_list", muteList == null ? new JsonArray() : muteList);
+        json.add("operation_logs", operationLogs == null ? new JsonArray() : operationLogs);
+        json.addProperty("allow_cheats", allowCheats);
+        json.addProperty("allow_pvp", pvpAllowed);
+        json.addProperty("spawn_protection", spawnProtection);
+        json.addProperty("keep_inventory", keepInventory);
+        json.addProperty("fire_spread", fireSpread);
+        json.addProperty("mob_spawning", mobSpawning);
+        json.addProperty("time_lock", timeControl);
+        json.addProperty("weather_lock", weatherLock);
+        json.addProperty("respawn_x", respawnX);
+        json.addProperty("respawn_y", respawnY);
+        json.addProperty("respawn_z", respawnZ);
+        json.addProperty("world_border_center_x", worldBorderCenterX);
+        json.addProperty("world_border_center_z", worldBorderCenterZ);
+        json.addProperty("world_border_radius", worldBorderRadius);
+        json.addProperty("auto_reconnect", autoReconnect);
+        json.addProperty("reconnect_retries", reconnectRetries);
+        json.addProperty("host_migration", hostMigration);
+        json.addProperty("backend_version", backendVersion);
+        json.addProperty("update_policy", updatePolicy);
+        json.addProperty("log_level", logLevel);
+        json.addProperty("cpu_limit", cpuLimit);
+        json.addProperty("memory_limit", memoryLimit);
+        json.add("backend_versions", backendVersions == null ? new JsonArray() : backendVersions);
+        return json;
+    }
+
+    private void initRoomManagementContent() {
+        int menuWidth = 120;
+        int spacing = 30; // Increased spacing
+        int contentX = menuWidth + spacing;
+        int contentWidth = this.width - contentX - 10; // Right margin 10
+
+        LinearLayout menu = LinearLayout.vertical().spacing(6);
+        menu.defaultCellSetting().alignHorizontallyLeft();
+        roomPageButtons.clear();
+        for (RoomPage page : RoomPage.values()) {
+            addRoomPageMenuButton(menu, page, menuWidth);
+        }
+        updateRoomPageMenuButtons();
+        
+        // Manually position menu
+        menu.arrangeElements();
+        menu.setPosition(10, this.layout.getHeaderHeight() + 10); // Left margin 10
+
+        this.roomPagePanel = new RoomPagePanel(contentWidth, this.height - this.layout.getHeaderHeight() - this.layout.getFooterHeight() - 20);
+        this.roomPagePanel.setPosition(contentX, this.layout.getHeaderHeight() + 10);
+
+        rebuildRoomPageContent(false);
+        
+        // We do NOT add these to layout.contentsFrame because we want manual positioning
+        // But we need to register widgets.
+        // For menu buttons:
+        menu.visitWidgets(this::addRenderableWidget);
+        // For panel content: done in rebuildRoomPageContent
+    }
+
+    private void addRoomPageMenuButton(LinearLayout menu, RoomPage page, int width) {
+        Button button = Button.builder(Component.literal(getRoomPageTitle(page)), b -> switchToPage(page)).width(width).build();
+        roomPageButtons.add(button);
+        menu.addChild(button);
+    }
+
+    private void switchToPage(RoomPage page) {
+        if (page == this.currentRoomPage) {
+            return;
+        }
+        this.currentRoomPage = page;
+        updateRoomPageMenuButtons();
+        rebuildRoomPageContent(true);
+    }
+
+    private String getRoomPageTitle(RoomPage page) {
+        return switch (page) {
+            case OVERVIEW -> "房间概览";
+            case PERMISSIONS -> "权限与访客";
+            case RULES -> "规则与玩法";
+            case WORLD -> "世界与边界";
+            case NETWORK -> "网络与容灾";
+            case BACKEND -> "后端与性能";
+        };
+    }
+
+    private void updateRoomPageMenuButtons() {
+        RoomPage[] pages = RoomPage.values();
+        for (int i = 0; i < pages.length && i < roomPageButtons.size(); i++) {
+            roomPageButtons.get(i).active = pages[i] != currentRoomPage;
+        }
+    }
+
+    private void rebuildRoomPageContent(boolean registerWidgets) {
+        if (roomPagePanel == null) {
+            return;
+        }
+        // Always remove old widgets from screen, regardless of registerWidgets flag
+        for (AbstractWidget widget : roomPageWidgets) {
+            this.removeWidget(widget);
+        }
+        
+        roomPageWidgets.clear();
+        LinearLayout pageContent = LinearLayout.vertical().spacing(12);
+        pageContent.defaultCellSetting().alignHorizontallyCenter(); // Or align left depending on design
+        switch (currentRoomPage) {
+            case OVERVIEW -> addOverviewPage(pageContent);
+            case PERMISSIONS -> addPermissionsPage(pageContent);
+            case RULES -> addRulesPage(pageContent);
+            case WORLD -> addWorldPage(pageContent);
+            case NETWORK -> addNetworkPage(pageContent);
+            case BACKEND -> addBackendPage(pageContent);
+        }
+        roomPagePanel.setContent(pageContent);
+        
+        // Manually arrange the new content
+        roomPagePanel.arrangeElements();
+        
+        pageContent.visitWidgets(widget -> {
+            roomPageWidgets.add(widget);
+            if (registerWidgets) {
+                this.addRenderableWidget(widget);
+            }
+        });
+        
+        if (!registerWidgets) {
+             // If called from init(), we must add them now because we are NOT adding roomPagePanel to layout
+             for (AbstractWidget widget : roomPageWidgets) {
+                 this.addRenderableWidget(widget);
+             }
+        }
+        
+        // No need to call repositionElements() for the whole screen if we just updated this panel
+    }
+
+    private static class RoomPagePanel extends AbstractLayout implements Layout {
+        private LayoutElement content;
+        private final int fixedWidth;
+        private final int fixedHeight;
+
+        private RoomPagePanel(int width, int height) {
+            super(0, 0, width, height);
+            this.fixedWidth = width;
+            this.fixedHeight = height;
+        }
+
+        private void setContent(LayoutElement content) {
+            this.content = content;
+        }
+
+        @Override
+        public void visitChildren(Consumer<LayoutElement> consumer) {
+            if (content != null) {
+                consumer.accept(content);
+            }
+        }
+
+        @Override
+        public void arrangeElements() {
+            if (content instanceof Layout layout) {
+                layout.arrangeElements();
+            }
+            if (content != null) {
+                // Center the content horizontally within this panel
+                int contentW = content.getWidth();
+                int offset = (this.fixedWidth - contentW) / 2;
+                content.setPosition(this.getX() + offset, this.getY());
+            }
+            this.width = fixedWidth;
+            this.height = fixedHeight;
+        }
+    }
+
+    private void addOverviewPage(LinearLayout content) {
+        LinearLayout roomInfo = LinearLayout.vertical().spacing(6);
+        roomInfo.defaultCellSetting().alignHorizontallyCenter();
+        String roomCode = "未知";
+        if (lastStateJson != null && lastStateJson.has("room")) {
+            roomCode = lastStateJson.get("room").getAsString();
+        }
+        String finalRoomCode = roomCode;
+        int playerCount = 0;
+        if (lastStateJson != null) {
+            if (lastStateJson.has("profiles")) {
+                playerCount = lastStateJson.getAsJsonArray("profiles").size();
+            } else if (lastStateJson.has("players")) {
+                playerCount = lastStateJson.getAsJsonArray("players").size();
+            }
+        }
+        roomInfo.addChild(new StringWidget(Component.literal("房间号: " + finalRoomCode), this.font));
+        roomInfo.addChild(new StringWidget(Component.literal("玩家数: " + playerCount), this.font));
+        roomInfo.addChild(new StringWidget(Component.literal("网络质量: " + networkQualityLabel + " " + (lastPingMs < 0 ? "--" : lastPingMs + "ms")), this.font));
+
+        LinearLayout remarkLayout = LinearLayout.horizontal().spacing(6);
+        EditBox remarkBox = new EditBox(this.font, 0, 0, 150, 20, Component.literal("房间描述"));
+        remarkBox.setValue(roomRemark);
+        remarkBox.setMaxLength(64);
+        remarkBox.setHint(Component.literal("房间描述 (MOTD)"));
+        remarkBox.setResponder(val -> {
+            roomRemark = val;
+            // Don't set dirty immediately on typing, use save button
+        });
+        remarkBox.setEditable(isHostConnected());
+        remarkLayout.addChild(remarkBox);
+        Button saveBtn = Button.builder(Component.literal("保存"), b -> {
+            roomStateDirty = true;
+            ClientSetupForge.showToast(Component.literal("提示"), Component.literal("房间描述已保存"));
+        }).width(44).build();
+        saveBtn.active = isHostConnected();
+        remarkLayout.addChild(saveBtn);
+        roomInfo.addChild(remarkLayout);
+
+        roomInfo.addChild(Button.builder(Component.literal("复制房间号"), button -> {
+            try {
+                this.minecraft.keyboardHandler.setClipboard(finalRoomCode);
+                ClientSetupForge.showToast(Component.literal("提示"), Component.literal("房间号已复制"));
+            } catch (Exception e) {
+                ClientSetupForge.showToast(Component.literal("提示"), Component.literal("复制失败，请手动复制房间号"));
+            }
+        }).width(200).build());
+        content.addChild(roomInfo);
+    }
+
+    private void addPermissionsPage(LinearLayout content) {
+        LinearLayout permission = LinearLayout.vertical().spacing(6);
+        permission.defaultCellSetting().alignHorizontallyCenter();
+        permission.addChild(new StringWidget(Component.literal(" 权限与访客 "), this.font));
+
+        String[] permissionCycle = new String[]{"可交互", "仅聊天", "仅观战", "禁止进入"};
+        Button permissionBtn = Button.builder(Component.literal("访客权限: " + visitorPermission), button -> {
+            int idx = 0;
+            for (int i = 0; i < permissionCycle.length; i++) {
+                if (permissionCycle[i].equals(visitorPermission)) {
+                    idx = i;
+                    break;
+                }
+            }
+            visitorPermission = permissionCycle[(idx + 1) % permissionCycle.length];
+            button.setMessage(Component.literal("访客权限: " + visitorPermission));
+            roomStateDirty = true;
+            ClientSetupForge.showToast(Component.literal("提示"), Component.literal("访客权限已更新"));
+        }).width(200).build();
+        permission.addChild(permissionBtn);
+
+        EditBox playerBox = new EditBox(this.font, 0, 0, 200, 20, Component.literal("玩家名"));
+        playerBox.setMaxLength(32);
+        playerBox.setHint(Component.literal("输入玩家名以管理"));
+        permission.addChild(playerBox);
+
+        permission.addChild(Button.builder(Component.literal("白名单启用: " + (whitelistEnabled ? "开" : "关")), button -> {
+            whitelistEnabled = !whitelistEnabled;
+            button.setMessage(Component.literal("白名单启用: " + (whitelistEnabled ? "开" : "关")));
+            roomStateDirty = true;
+            ClientSetupForge.showToast(Component.literal("提示"), Component.literal("白名单设置已更新"));
+        }).width(200).build());
+
+        LinearLayout listButtons = LinearLayout.horizontal().spacing(6);
+        listButtons.addChild(Button.builder(Component.literal("白名单+"), b -> {
+            String name = playerBox.getValue().trim();
+            if (!name.isEmpty()) {
+                addNameToArray(whitelist, name);
+                roomStateDirty = true;
+                playerBox.setValue("");
+                rebuildRoomPageContent(true);
+                ClientSetupForge.showToast(Component.literal("提示"), Component.literal("已添加到白名单"));
+            }
+        }).width(60).build());
+        listButtons.addChild(Button.builder(Component.literal("白名单-"), b -> {
+            String name = playerBox.getValue().trim();
+            if (!name.isEmpty()) {
+                removeNameFromArray(whitelist, name);
+                roomStateDirty = true;
+                playerBox.setValue("");
+                rebuildRoomPageContent(true);
+                ClientSetupForge.showToast(Component.literal("提示"), Component.literal("已从白名单移除"));
+            }
+        }).width(60).build());
+        listButtons.addChild(Button.builder(Component.literal("黑名单+"), b -> {
+            String name = playerBox.getValue().trim();
+            if (!name.isEmpty()) {
+                addNameToArray(blacklist, name);
+                roomStateDirty = true;
+                playerBox.setValue("");
+                rebuildRoomPageContent(true);
+                ClientSetupForge.showToast(Component.literal("提示"), Component.literal("已添加到黑名单"));
+            }
+        }).width(60).build());
+        listButtons.addChild(Button.builder(Component.literal("禁言+"), b -> {
+            String name = playerBox.getValue().trim();
+            if (!name.isEmpty()) {
+                addNameToArray(muteList, name);
+                roomStateDirty = true;
+                playerBox.setValue("");
+                rebuildRoomPageContent(true);
+                ClientSetupForge.showToast(Component.literal("提示"), Component.literal("已添加到禁言列表"));
+            }
+        }).width(60).build());
+        permission.addChild(listButtons);
+        permission.addChild(new StringWidget(Component.literal("白名单: " + whitelist.size() + " | 黑名单: " + blacklist.size() + " | 禁言: " + muteList.size()), this.font));
+
+        permission.addChild(new ListHeaderWidget(300));
+        
+        int usedHeight = 220; 
+        int availableHeight = this.height - this.layout.getHeaderHeight() - this.layout.getFooterHeight() - 20;
+        int listHeight = Math.max(100, availableHeight - usedHeight - 10);
+        
+        PlayerListScrollWidget scrollWidget = new PlayerListScrollWidget(this.minecraft, 320, listHeight, 0, 0);
+        
+        appendListToScroll(scrollWidget, "白名单", whitelist);
+        appendListToScroll(scrollWidget, "黑名单", blacklist);
+        appendListToScroll(scrollWidget, "禁言列表", muteList);
+        
+        permission.addChild(new PlayerListWrapperWidget(scrollWidget, 320, listHeight));
+
+        content.addChild(permission);
+    }
+    
+    private void appendListToScroll(PlayerListScrollWidget widget, String title, JsonArray list) {
+        if (list == null || list.size() == 0) return;
+        for (JsonElement el : list) {
+             if (el != null && el.isJsonPrimitive()) {
+                 String name = el.getAsString();
+                 String typeStr = title.replace("列表", "");
+                 widget.addItem(name, typeStr, b -> {
+                    removeNameFromArray(list, name);
+                    roomStateDirty = true;
+                    rebuildRoomPageContent(true);
+                    ClientSetupForge.showToast(Component.literal("提示"), Component.literal("已从" + title + "移除 " + name));
+                 });
+             }
+        }
+    }
+
+    private class ListHeaderWidget extends AbstractWidget {
+        public ListHeaderWidget(int width) {
+            super(0, 0, width, 20, Component.empty());
+            this.active = false;
+        }
+        @Override
+        public void renderWidget(net.minecraft.client.gui.GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+             guiGraphics.drawString(EnderDashboard.this.font, Component.literal("游戏名").withStyle(net.minecraft.ChatFormatting.YELLOW), getX() + 10, getY() + 6, 0xFFFFFF);
+             guiGraphics.drawString(EnderDashboard.this.font, Component.literal("名单类型").withStyle(net.minecraft.ChatFormatting.YELLOW), getX() + 140, getY() + 6, 0xFFFFFF);
+             guiGraphics.drawString(EnderDashboard.this.font, Component.literal("操作").withStyle(net.minecraft.ChatFormatting.YELLOW), getX() + 240, getY() + 6, 0xFFFFFF);
+        }
+        @Override
+        protected void updateWidgetNarration(net.minecraft.client.gui.narration.NarrationElementOutput narrationElementOutput) {}
+    }
+
+
+
+    private boolean pvpAllowed = true;
+
+    private void addRulesPage(LinearLayout content) {
+        LinearLayout rules = LinearLayout.vertical().spacing(6);
+        rules.defaultCellSetting().alignHorizontallyCenter();
+
+        rules.addChild(Button.builder(Component.literal("允许作弊: " + (allowCheats ? "开" : "关")), b -> {
+            allowCheats = !allowCheats;
+            b.setMessage(Component.literal("允许作弊: " + (allowCheats ? "开" : "关")));
+            roomStateDirty = true;
+            ClientSetupForge.showToast(Component.literal("提示"), Component.literal("规则已更新"));
+        }).width(200).build());
+        rules.addChild(Button.builder(Component.literal("保留物品: " + (keepInventory ? "开" : "关")), b -> {
+            keepInventory = !keepInventory;
+            b.setMessage(Component.literal("保留物品: " + (keepInventory ? "开" : "关")));
+            roomStateDirty = true;
+            ClientSetupForge.showToast(Component.literal("提示"), Component.literal("规则已更新"));
+        }).width(200).build());
+        rules.addChild(Button.builder(Component.literal("允许PVP: " + (pvpAllowed ? "开" : "关")), b -> {
+            pvpAllowed = !pvpAllowed;
+            b.setMessage(Component.literal("允许PVP: " + (pvpAllowed ? "开" : "关")));
+            roomStateDirty = true;
+            ClientSetupForge.showToast(Component.literal("提示"), Component.literal("规则已更新"));
+        }).width(200).build());
+        rules.addChild(Button.builder(Component.literal("天气锁定: " + (weatherLock ? "开" : "关")), b -> {
+            weatherLock = !weatherLock;
+            b.setMessage(Component.literal("天气锁定: " + (weatherLock ? "开" : "关")));
+            roomStateDirty = true;
+            ClientSetupForge.showToast(Component.literal("提示"), Component.literal("规则已更新"));
+        }).width(200).build());
+
+        rules.addChild(Button.builder(Component.literal("更多游戏规则设置..."), b -> {
+            IntegratedServer server = this.minecraft.getSingleplayerServer();
+            if (server == null) {
+                return;
+            }
+            this.minecraft.setScreen(new EditGameRulesScreen(server.getGameRules().copy(), (rulesOpt) -> {
+                this.minecraft.setScreen(this);
+                rulesOpt.ifPresent(r -> server.getGameRules().assignFrom(r, server));
+            }));
+        }).width(200).build());
+
+        rules.addChild(Button.builder(Component.literal("应用到当前世界"), b -> applyRulesToServer()).width(200).build());
+        content.addChild(rules);
+    }
+
+    private void addWorldPage(LinearLayout content) {
+        LinearLayout world = LinearLayout.vertical().spacing(6);
+        world.defaultCellSetting().alignHorizontallyCenter();
+
+        EditBox respawnXBox = new EditBox(this.font, 0, 0, 64, 20, Component.literal("X"));
+        respawnXBox.setValue(String.valueOf(respawnX));
+        respawnXBox.setResponder(val -> {
+            respawnX = parseIntSafe(val, respawnX);
+            roomStateDirty = true;
+        });
+        EditBox respawnYBox = new EditBox(this.font, 0, 0, 64, 20, Component.literal("Y"));
+        respawnYBox.setValue(String.valueOf(respawnY));
+        respawnYBox.setResponder(val -> {
+            respawnY = parseIntSafe(val, respawnY);
+            roomStateDirty = true;
+        });
+        EditBox respawnZBox = new EditBox(this.font, 0, 0, 64, 20, Component.literal("Z"));
+        respawnZBox.setValue(String.valueOf(respawnZ));
+        respawnZBox.setResponder(val -> {
+            respawnZ = parseIntSafe(val, respawnZ);
+            roomStateDirty = true;
+        });
+        LinearLayout respawnRow = LinearLayout.horizontal().spacing(6);
+        respawnRow.addChild(respawnXBox);
+        respawnRow.addChild(respawnYBox);
+        respawnRow.addChild(respawnZBox);
+        world.addChild(new StringWidget(Component.literal("重生点 (X Y Z)"), this.font));
+        world.addChild(respawnRow);
+        world.addChild(Button.builder(Component.literal("应用重生点"), b -> {
+            applyRespawn();
+            ClientSetupForge.showToast(Component.literal("提示"), Component.literal("重生点已应用"));
+        }).width(200).build());
+
+        EditBox borderXBox = new EditBox(this.font, 0, 0, 64, 20, Component.literal("中心X"));
+        borderXBox.setValue(String.valueOf(worldBorderCenterX));
+        borderXBox.setResponder(val -> {
+            worldBorderCenterX = parseIntSafe(val, worldBorderCenterX);
+            roomStateDirty = true;
+        });
+        EditBox borderZBox = new EditBox(this.font, 0, 0, 64, 20, Component.literal("中心Z"));
+        borderZBox.setValue(String.valueOf(worldBorderCenterZ));
+        borderZBox.setResponder(val -> {
+            worldBorderCenterZ = parseIntSafe(val, worldBorderCenterZ);
+            roomStateDirty = true;
+        });
+        EditBox borderRadiusBox = new EditBox(this.font, 0, 0, 64, 20, Component.literal("半径"));
+        borderRadiusBox.setValue(String.valueOf(worldBorderRadius));
+        borderRadiusBox.setResponder(val -> {
+            worldBorderRadius = parseIntSafe(val, worldBorderRadius);
+            roomStateDirty = true;
+        });
+        LinearLayout borderRow = LinearLayout.horizontal().spacing(6);
+        borderRow.addChild(borderXBox);
+        borderRow.addChild(borderZBox);
+        borderRow.addChild(borderRadiusBox);
+        world.addChild(new StringWidget(Component.literal("世界边界 (中心X 中心Z 半径)"), this.font));
+        world.addChild(borderRow);
+        world.addChild(Button.builder(Component.literal("应用世界边界"), b -> {
+            applyWorldBorder();
+            ClientSetupForge.showToast(Component.literal("提示"), Component.literal("世界边界已应用"));
+        }).width(200).build());
+        content.addChild(world);
+    }
+
+    private void addNetworkPage(LinearLayout content) {
+        LinearLayout network = LinearLayout.vertical().spacing(6);
+        network.defaultCellSetting().alignHorizontallyCenter();
+        network.addChild(Button.builder(Component.literal("自动重连: " + (autoReconnect ? "开" : "关")), b -> {
+            autoReconnect = !autoReconnect;
+            b.setMessage(Component.literal("自动重连: " + (autoReconnect ? "开" : "关")));
+            roomStateDirty = true;
+            ClientSetupForge.showToast(Component.literal("提示"), Component.literal("设置已更新"));
+        }).width(200).build());
+        EditBox retryBox = new EditBox(this.font, 0, 0, 200, 20, Component.literal("重试次数"));
+        retryBox.setValue(String.valueOf(reconnectRetries));
+        retryBox.setResponder(val -> {
+            reconnectRetries = parseIntSafe(val, reconnectRetries);
+            roomStateDirty = true;
+        });
+        network.addChild(retryBox);
+        content.addChild(network);
+    }
+
+    private void addBackendPage(LinearLayout content) {
+        LinearLayout backend = LinearLayout.vertical().spacing(6);
+        backend.defaultCellSetting().alignHorizontallyCenter();
+        backend.addChild(Button.builder(Component.literal("版本: " + backendVersion), b -> {
+            if (backendVersions.size() > 0) {
+                int idx = 0;
+                for (int i = 0; i < backendVersions.size(); i++) {
+                    if (backendVersions.get(i).getAsString().equals(backendVersion)) {
+                        idx = i;
+                        break;
+                    }
+                }
+                backendVersion = backendVersions.get((idx + 1) % backendVersions.size()).getAsString();
+                b.setMessage(Component.literal("版本: " + backendVersion));
+                roomStateDirty = true;
+                ClientSetupForge.showToast(Component.literal("提示"), Component.literal("设置已更新"));
+            }
+        }).width(200).build());
+        backend.addChild(Button.builder(Component.literal("更新策略: " + updatePolicy), b -> {
+            updatePolicy = "立即".equals(updatePolicy) ? "延后" : "立即";
+            b.setMessage(Component.literal("更新策略: " + updatePolicy));
+            roomStateDirty = true;
+            ClientSetupForge.showToast(Component.literal("提示"), Component.literal("设置已更新"));
+        }).width(200).build());
+        backend.addChild(Button.builder(Component.literal("日志级别: " + logLevel), b -> {
+            if ("INFO".equals(logLevel)) {
+                logLevel = "WARN";
+            } else if ("WARN".equals(logLevel)) {
+                logLevel = "DEBUG";
+            } else {
+                logLevel = "INFO";
+            }
+            b.setMessage(Component.literal("日志级别: " + logLevel));
+            roomStateDirty = true;
+            ClientSetupForge.showToast(Component.literal("提示"), Component.literal("设置已更新"));
+        }).width(200).build());
+
+        EditBox cpuBox = new EditBox(this.font, 0, 0, 200, 20, Component.literal("CPU限制"));
+        cpuBox.setValue(String.valueOf(cpuLimit));
+        cpuBox.setResponder(val -> {
+            cpuLimit = parseIntSafe(val, cpuLimit);
+            roomStateDirty = true;
+        });
+        backend.addChild(cpuBox);
+        EditBox memBox = new EditBox(this.font, 0, 0, 200, 20, Component.literal("内存限制"));
+        memBox.setValue(String.valueOf(memoryLimit));
+        memBox.setResponder(val -> {
+            memoryLimit = parseIntSafe(val, memoryLimit);
+            roomStateDirty = true;
+        });
+        backend.addChild(memBox);
+
+        LinearLayout exportRow = LinearLayout.horizontal().spacing(6);
+        exportRow.addChild(Button.builder(Component.literal("导出设置"), b -> exportRoomState()).width(96).build());
+        exportRow.addChild(Button.builder(Component.literal("导入设置"), b -> importRoomState()).width(96).build());
+        backend.addChild(exportRow);
+
+        if (operationLogs.size() > 0) {
+            int start = Math.max(0, operationLogs.size() - 5);
+            for (int i = start; i < operationLogs.size(); i++) {
+                backend.addChild(new StringWidget(Component.literal(operationLogs.get(i).getAsString()), this.font));
+            }
+        }
+        content.addChild(backend);
+    }
+
+    private void applyRulesToServer() {
+        IntegratedServer server = this.minecraft.getSingleplayerServer();
+        if (server == null) {
+            return;
+        }
+        server.getGameRules().getRule(GameRules.RULE_KEEPINVENTORY).set(keepInventory, server);
+        server.getGameRules().getRule(GameRules.RULE_WEATHER_CYCLE).set(!weatherLock, server);
+        setBooleanGameRule(server, fireSpread, "RULE_DOFIRETICK", "RULE_DO_FIRE_TICK");
+        setBooleanGameRule(server, mobSpawning, "RULE_DOMOBSPAWNING", "RULE_DO_MOB_SPAWNING");
+        boolean cycle = "cycle".equals(timeControl);
+        setBooleanGameRule(server, cycle, "RULE_DAYLIGHT", "RULE_DAYLIGHT_CYCLE", "RULE_DO_DAYLIGHT_CYCLE");
+        if (!cycle) {
+            ServerLevel level = server.overworld();
+            if (level != null) {
+                setWorldTime(level, "night".equals(timeControl) ? 13000L : 1000L);
+            }
+        }
+        server.setPvpAllowed(pvpAllowed);
+        setCheatsAllowed(server, allowCheats);
+        setSpawnProtection(server, spawnProtection);
+    }
+
+    private void applyRoomManagementStateToServer() {
+        IntegratedServer server = this.minecraft.getSingleplayerServer();
+        if (server == null) {
+            return;
+        }
+        applyRulesToServer();
+        enforceAccessControl(server);
+    }
+
+    private void enforceAccessControl(IntegratedServer server) {
+        String hostName = this.minecraft.getUser().getName();
+        List<ServerPlayer> players = server.getPlayerList().getPlayers();
+        for (ServerPlayer player : players) {
+            String name = player.getGameProfile().getName();
+            if (name != null && name.equalsIgnoreCase(hostName)) {
+                continue;
+            }
+            if (containsName(blacklist, name)) {
+                disconnectPlayer(player, Component.literal("你已被房主加入黑名单"));
+                continue;
+            }
+            if (whitelistEnabled && whitelist != null && !containsName(whitelist, name)) {
+                disconnectPlayer(player, Component.literal("你不在白名单中"));
+                continue;
+            }
+            if ("禁止进入".equals(visitorPermission)) {
+                disconnectPlayer(player, Component.literal("房间禁止访客进入"));
+                continue;
+            }
+            if ("仅观战".equals(visitorPermission)) {
+                setPlayerGameType(player, GameType.SPECTATOR);
+            } else if ("仅聊天".equals(visitorPermission)) {
+                setPlayerGameType(player, GameType.ADVENTURE);
+            }
+        }
+    }
+
+    private void addNameToArray(JsonArray array, String name) {
+        if (array == null || name == null) {
+            return;
+        }
+        for (JsonElement el : array) {
+            if (el != null && el.isJsonPrimitive() && name.equalsIgnoreCase(el.getAsString())) {
+                return;
+            }
+        }
+        array.add(name);
+    }
+
+    private void removeNameFromArray(JsonArray array, String name) {
+        if (array == null || name == null) {
+            return;
+        }
+        for (int i = 0; i < array.size(); i++) {
+            JsonElement el = array.get(i);
+            if (el != null && el.isJsonPrimitive() && name.equalsIgnoreCase(el.getAsString())) {
+                array.remove(i);
+                return;
+            }
+        }
+    }
+
+    private boolean containsName(JsonArray array, String name) {
+        if (array == null || name == null) {
+            return false;
+        }
+        for (JsonElement el : array) {
+            if (el != null && el.isJsonPrimitive() && name.equalsIgnoreCase(el.getAsString())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void disconnectPlayer(ServerPlayer player, Component reason) {
+        try {
+            player.connection.disconnect(reason);
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void setPlayerGameType(ServerPlayer player, GameType type) {
+        try {
+            java.lang.reflect.Method m = player.getClass().getMethod("setGameMode", GameType.class);
+            m.invoke(player, type);
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void setCheatsAllowed(IntegratedServer server, boolean value) {
+        try {
+            Object playerList = server.getPlayerList();
+            java.lang.reflect.Method m = playerList.getClass().getMethod("setAllowCheatsForAllPlayers", boolean.class);
+            m.invoke(playerList, value);
+            return;
+        } catch (Exception ignored) {
+        }
+        try {
+            Object playerList = server.getPlayerList();
+            java.lang.reflect.Method m = playerList.getClass().getMethod("setAllowCommandsForAllPlayers", boolean.class);
+            m.invoke(playerList, value);
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void setSpawnProtection(IntegratedServer server, int value) {
+        int radius = Math.max(0, value);
+        try {
+            Object playerList = server.getPlayerList();
+            java.lang.reflect.Method m = playerList.getClass().getMethod("setSpawnProtectionRadius", int.class);
+            m.invoke(playerList, radius);
+            return;
+        } catch (Exception ignored) {
+        }
+        try {
+            Object playerList = server.getPlayerList();
+            java.lang.reflect.Method m = playerList.getClass().getMethod("setSpawnProtection", int.class);
+            m.invoke(playerList, radius);
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void setBooleanGameRule(IntegratedServer server, boolean value, String... fieldNames) {
+        if (server == null || fieldNames == null) {
+            return;
+        }
+        Object gameRules = server.getGameRules();
+        for (String fieldName : fieldNames) {
+            if (fieldName == null || fieldName.isBlank()) {
+                continue;
+            }
+            try {
+                java.lang.reflect.Field f = GameRules.class.getField(fieldName);
+                Object key = f.get(null);
+                Object rule = null;
+                try {
+                    java.lang.reflect.Method m = gameRules.getClass().getMethod("getRule", key.getClass());
+                    rule = m.invoke(gameRules, key);
+                } catch (Exception ignored) {
+                    for (java.lang.reflect.Method m : gameRules.getClass().getMethods()) {
+                        if (!"getRule".equals(m.getName()) || m.getParameterCount() != 1) {
+                            continue;
+                        }
+                        rule = m.invoke(gameRules, key);
+                        break;
+                    }
+                }
+                if (rule == null) {
+                    continue;
+                }
+                for (java.lang.reflect.Method m : rule.getClass().getMethods()) {
+                    if (!"set".equals(m.getName()) || m.getParameterCount() != 2) {
+                        continue;
+                    }
+                    Class<?>[] params = m.getParameterTypes();
+                    if (params.length == 2 && params[0] == boolean.class) {
+                        m.invoke(rule, value, server);
+                        return;
+                    }
+                }
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
+    private void setWorldTime(ServerLevel level, long time) {
+        if (level == null) {
+            return;
+        }
+        try {
+            java.lang.reflect.Method m = level.getClass().getMethod("setDayTime", long.class);
+            m.invoke(level, time);
+            return;
+        } catch (Exception ignored) {
+        }
+        try {
+            java.lang.reflect.Method m = level.getClass().getMethod("setTimeOfDay", long.class);
+            m.invoke(level, time);
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void applyRespawn() {
+        IntegratedServer server = this.minecraft.getSingleplayerServer();
+        if (server == null) {
+            return;
+        }
+        ServerLevel level = server.overworld();
+        if (level == null) {
+            return;
+        }
+        level.setDefaultSpawnPos(new BlockPos(respawnX, respawnY, respawnZ), 0.0f);
+    }
+
+    private void applyWorldBorder() {
+        IntegratedServer server = this.minecraft.getSingleplayerServer();
+        if (server == null) {
+            return;
+        }
+        ServerLevel level = server.overworld();
+        if (level == null) {
+            return;
+        }
+        WorldBorder border = level.getWorldBorder();
+        border.setCenter(worldBorderCenterX, worldBorderCenterZ);
+        if (worldBorderRadius > 0) {
+            border.setSize(worldBorderRadius * 2.0);
+        }
+    }
+
+    private void exportRoomState() {
+        try {
+            String json = buildRoomManagementStateJson().toString();
+            this.minecraft.keyboardHandler.setClipboard(json);
+            ClientSetupForge.showToast(Component.literal("提示"), Component.literal("配置已复制到剪贴板"));
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void importRoomState() {
+        try {
+            String json = this.minecraft.keyboardHandler.getClipboard();
+            if (json == null || json.isBlank()) {
+                return;
+            }
+            JsonObject obj = GSON.fromJson(json, JsonObject.class);
+            if (obj == null) {
+                return;
+            }
+            mergeRoomManagementState(obj);
+            roomStateDirty = true;
+            this.init(this.minecraft, this.width, this.height);
+        } catch (Exception ignored) {
+        }
+    }
+
+    private int parseIntSafe(String value, int fallback) {
+        try {
+            return Integer.parseInt(value.trim());
+        } catch (Exception e) {
+            return fallback;
+        }
+    }
+
+}

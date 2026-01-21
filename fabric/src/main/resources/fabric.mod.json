@@ -1,30 +1,30 @@
 {
 	"schemaVersion": 1,
-	"id": "minecraftterracotta",
+	"id": "ender_online",
 	"version": "${version}",
-	"name": "MinecraftTerracotta",
+	"name": "MinecraftEnder",
 	"description": "Simple and easy-to-use P2P multiplayer solution for Minecraft.",
 	"authors": [
 		"xingchentye"
 	],
 	"license": "AGPL-3.0",
-	"icon": "assets/minecraftterracotta/icon.png",
+	"icon": "assets/ender_online/icon.png",
 	"environment": "*",
 	"entrypoints": {
 		"main": [
-			"com.multiplayer.terracotta.fabric.MinecraftTerracotta"
+			"com.multiplayer.ender.fabric.MinecraftEnder"
 		],
 		"client": [
-			"com.multiplayer.terracotta.fabric.MinecraftTerracottaClient"
+			"com.multiplayer.ender.fabric.MinecraftEnderClient"
 		],
 		"fabric-datagen": [
-			"com.multiplayer.terracotta.fabric.MinecraftTerracottaDataGenerator"
+			"com.multiplayer.ender.fabric.MinecraftEnderDataGenerator"
 		]
 	},
 	"mixins": [
-		"minecraftterracotta.mixins.json",
+		"ender_online.mixins.json",
 		{
-			"config": "minecraftterracotta.client.mixins.json",
+			"config": "ender_online.client.mixins.json",
 			"environment": "client"
 		}
 	],
@@ -35,3 +35,4 @@
 		"fabric-api": "*"
 	}
 }
+

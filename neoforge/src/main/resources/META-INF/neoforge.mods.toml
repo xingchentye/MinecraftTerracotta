@@ -3,25 +3,26 @@ loaderVersion="[1,)"
 license="AGPL-3.0"
 
 [[mods]]
-modId="minecraftterracotta"
+modId="ender_online"
 version="0.1.1"
-displayName="MinecraftTerracotta"
+displayName="MinecraftEnder"
 authors="xingchentye"
 description='''
 Simple and easy-to-use P2P multiplayer solution for Minecraft.
 '''
 
-[[dependencies.minecraftterracotta]]
+[[dependencies.ender_online]]
 modId="neoforge"
 type="required"
 versionRange="[21.1.218,)"
 ordering="NONE"
 side="BOTH"
 
-[[dependencies.minecraftterracotta]]
+[[dependencies.ender_online]]
 modId="minecraft"
 type="required"
 versionRange="[1.21,1.22)"
 ordering="NONE"
 side="BOTH"
+
 

@@ -25,3 +25,7 @@ run-data
 
 repo
 rule.md
+
+docs
+
+.vscode/launch.json

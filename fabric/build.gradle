@@ -20,7 +20,7 @@ loom {
 	splitEnvironmentSourceSets()
 
 	mods {
-		"minecraftterracotta" {
+		"ender_online" {
 			sourceSet sourceSets.main
 			sourceSet sourceSets.client
 		}
@@ -36,7 +36,10 @@ dependencies {
 	// Fabric API. This is technically optional, but you probably want it anyway.
 	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
 
-	implementation project(':core')
+	implementation project(':ender_core')
+	
+	include "org.java-websocket:Java-WebSocket:1.5.4"
+	include "org.apache.commons:commons-compress:1.26.0"
 }
 
 processResources {
@@ -68,7 +71,7 @@ jar {
 	from("LICENSE") {
 		rename { "${it}_${inputs.properties.archivesName}"}
 	}
-	from(project(':core').sourceSets.main.output)
+	from(project(':ender_core').sourceSets.main.output)
 }
 
 tasks.named("remapJar") {
@@ -92,3 +95,4 @@ publishing {
 		// retrieving dependencies.
 	}
 }
+
