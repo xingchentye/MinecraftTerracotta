@@ -101,4 +101,4 @@
 本项目代码采用 **GNU Affero General Public License v3.0 (AGPL-3.0)** 许可证。
 
 ---
-*Powered by EasyTier & MinecraftEnder Team*
+*Powered by EasyTier & EnderOnline Team*

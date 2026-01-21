@@ -2,7 +2,7 @@
 	"schemaVersion": 1,
 	"id": "ender_online",
 	"version": "${version}",
-	"name": "MinecraftEnder",
+	"name": "EnderOnline",
 	"description": "Simple and easy-to-use P2P multiplayer solution for Minecraft.",
 	"authors": [
 		"xingchentye"

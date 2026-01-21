@@ -5,7 +5,7 @@ license="AGPL-3.0"
 [[mods]]
 modId="ender_online"
 version="0.1.1"
-displayName="MinecraftEnder"
+displayName="EnderOnline"
 authors="xingchentye"
 description='''
 Simple and easy-to-use P2P multiplayer solution for Minecraft.
