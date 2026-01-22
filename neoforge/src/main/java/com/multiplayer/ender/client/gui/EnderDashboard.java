@@ -684,6 +684,14 @@ public class EnderDashboard extends EnderBaseScreen {
     }
 
     private void initRoomManagementContent() {
+        // Ensure roomRemark is synced from state before rendering
+        if (roomRemark == null || roomRemark.isEmpty()) {
+            JsonObject state = EnderApiClient.getRoomManagementStateSync();
+            if (state != null && state.has("room_remark")) {
+                roomRemark = state.get("room_remark").getAsString();
+            }
+        }
+
         int menuWidth = 120;
         int spacing = 30; // Increased spacing
         int contentX = menuWidth + spacing;
@@ -869,6 +877,8 @@ public class EnderDashboard extends EnderBaseScreen {
         remarkBox.setEditable(isHostConnected());
         remarkLayout.addChild(remarkBox);
         Button saveBtn = Button.builder(Component.literal("保存"), b -> {
+            // Apply the current value from the box to roomRemark before saving
+            roomRemark = remarkBox.getValue();
             roomStateDirty = true;
             ClientSetup.showToast(Component.literal("提示"), Component.literal("房间描述已保存"));
         }).width(44).build();
@@ -883,6 +893,14 @@ public class EnderDashboard extends EnderBaseScreen {
             } catch (Exception e) {
                 ClientSetup.showToast(Component.literal("提示"), Component.literal("复制失败，请手动复制房间号"));
             }
+        }).width(200).build());
+
+        roomInfo.addChild(Button.builder(Component.literal("关闭房间"), button -> {
+            EnderApiClient.setIdle();
+            new Thread(ProcessLauncher::stop, "Ender-Stopper").start();
+            wasConnected = false;
+            this.isUiConnected = false;
+            this.onClose();
         }).width(200).build());
         content.addChild(roomInfo);
     }
@@ -992,20 +1010,30 @@ public class EnderDashboard extends EnderBaseScreen {
         LinearLayout world = LinearLayout.vertical().spacing(6);
         world.defaultCellSetting().alignHorizontallyCenter();
 
+        // Auto-fill coordinates from player position
+        int fillX = respawnX;
+        int fillY = respawnY;
+        int fillZ = respawnZ;
+        if (this.minecraft != null && this.minecraft.player != null) {
+            fillX = (int) this.minecraft.player.getX();
+            fillY = (int) this.minecraft.player.getY();
+            fillZ = (int) this.minecraft.player.getZ();
+        }
+
         EditBox respawnXBox = new EditBox(this.font, 0, 0, 64, 20, Component.literal("X"));
-        respawnXBox.setValue(String.valueOf(respawnX));
+        respawnXBox.setValue(String.valueOf(fillX));
         respawnXBox.setResponder(val -> {
             respawnX = parseIntSafe(val, respawnX);
             roomStateDirty = true;
         });
         EditBox respawnYBox = new EditBox(this.font, 0, 0, 64, 20, Component.literal("Y"));
-        respawnYBox.setValue(String.valueOf(respawnY));
+        respawnYBox.setValue(String.valueOf(fillY));
         respawnYBox.setResponder(val -> {
             respawnY = parseIntSafe(val, respawnY);
             roomStateDirty = true;
         });
         EditBox respawnZBox = new EditBox(this.font, 0, 0, 64, 20, Component.literal("Z"));
-        respawnZBox.setValue(String.valueOf(respawnZ));
+        respawnZBox.setValue(String.valueOf(fillZ));
         respawnZBox.setResponder(val -> {
             respawnZ = parseIntSafe(val, respawnZ);
             roomStateDirty = true;
@@ -1164,6 +1192,15 @@ public class EnderDashboard extends EnderBaseScreen {
         if (server == null) {
             return;
         }
+        
+        // Sync MOTD
+        if (this.roomRemark != null) {
+            try {
+                server.setMotd(this.roomRemark);
+            } catch (Exception ignored) {
+            }
+        }
+
         applyRulesToServer();
         enforceAccessControl(server);
     }

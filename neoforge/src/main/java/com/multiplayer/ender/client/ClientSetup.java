@@ -280,6 +280,16 @@ public class ClientSetup {
     }
 
     @SubscribeEvent
+    public static void onClientLogout(net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent.LoggingOut event) {
+        if (wasHostOk) {
+             LOGGER.info("Detected world disconnect, stopping hosting...");
+             EnderApiClient.setIdle();
+             new Thread(com.multiplayer.ender.logic.ProcessLauncher::stop, "Ender-Stopper").start();
+             wasHostOk = false;
+        }
+    }
+
+    @SubscribeEvent
     public static void onScreenInit(ScreenEvent.Init.Post event) {
         if (event.getScreen() instanceof TitleScreen && !hasAutoStarted) {
             hasAutoStarted = true;

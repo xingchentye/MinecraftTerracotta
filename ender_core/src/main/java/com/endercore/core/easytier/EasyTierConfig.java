@@ -51,7 +51,7 @@ public class EasyTierConfig {
     public String hostname = "";
 
     @SerializedName("log_level")
-    public String logLevel = "info";
+    public String logLevel = "INFO";
     
     // Default constructor
     public EasyTierConfig() {

@@ -8,7 +8,6 @@ import com.multiplayer.ender.fabric.FabricConfig;
 import com.multiplayer.ender.fabric.MinecraftEnderClient;
 import com.multiplayer.ender.network.EnderApiClient;
 import com.multiplayer.ender.logic.ProcessLauncher;
-import com.multiplayer.ender.logic.ProcessLauncher;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.widget.TextFieldWidget;
@@ -773,6 +772,14 @@ public class EnderDashboard extends EnderBaseScreen {
     }
 
     private void initRoomManagementContent() {
+        // Ensure roomRemark is synced from state before rendering
+        if (roomRemark == null || roomRemark.isEmpty()) {
+            JsonObject state = EnderApiClient.getRoomManagementStateSync();
+            if (state != null && state.has("room_remark")) {
+                roomRemark = state.get("room_remark").getAsString();
+            }
+        }
+
         // Use custom layout logic instead of DirectionalLayoutWidget container
         // Left Menu
         int menuWidth = 120;
@@ -908,6 +915,8 @@ public class EnderDashboard extends EnderBaseScreen {
         remarkBox.setEditable(isHostConnected());
         remarkLayout.add(remarkBox);
         net.minecraft.client.gui.widget.ButtonWidget saveBtn = net.minecraft.client.gui.widget.ButtonWidget.builder(Text.literal("保存"), b -> {
+            // Apply the current value from the box to roomRemark before saving
+            roomRemark = remarkBox.getText();
             roomStateDirty = true;
             MinecraftEnderClient.showToast(Text.literal("提示"), Text.literal("房间描述已保存"));
         }).width(44).build();
@@ -923,6 +932,17 @@ public class EnderDashboard extends EnderBaseScreen {
                         MinecraftEnderClient.showToast(Text.literal("提示"), Text.literal("房间号已复制"));
                     } catch (Exception ignored) {
                     }
+                }
+        ).width(200).build());
+
+        roomInfo.add(net.minecraft.client.gui.widget.ButtonWidget.builder(
+                Text.literal("关闭房间"),
+                button -> {
+                    EnderApiClient.setIdle();
+                    new Thread(ProcessLauncher::stop, "Ender-Stopper").start();
+                    wasConnected = false;
+                    this.isUiConnected = false;
+                    this.onClose();
                 }
         ).width(200).build());
         content.add(roomInfo);
@@ -1161,20 +1181,31 @@ public class EnderDashboard extends EnderBaseScreen {
         DirectionalLayoutWidget world = DirectionalLayoutWidget.vertical().spacing(6);
         world.getMainPositioner().alignHorizontalCenter();
         world.add(new TextWidget(Text.literal(" 世界与边界 "), this.textRenderer));
+        
+        // Auto-fill coordinates from player position
+        int fillX = respawnX;
+        int fillY = respawnY;
+        int fillZ = respawnZ;
+        if (this.client != null && this.client.player != null) {
+            fillX = (int) this.client.player.getX();
+            fillY = (int) this.client.player.getY();
+            fillZ = (int) this.client.player.getZ();
+        }
+
         TextFieldWidget respawnXBox = new TextFieldWidget(this.textRenderer, 64, 20, Text.literal("X"));
-        respawnXBox.setText(String.valueOf(respawnX));
+        respawnXBox.setText(String.valueOf(fillX));
         respawnXBox.setChangedListener(val -> {
             respawnX = parseIntSafe(val, respawnX);
             roomStateDirty = true;
         });
         TextFieldWidget respawnYBox = new TextFieldWidget(this.textRenderer, 64, 20, Text.literal("Y"));
-        respawnYBox.setText(String.valueOf(respawnY));
+        respawnYBox.setText(String.valueOf(fillY));
         respawnYBox.setChangedListener(val -> {
             respawnY = parseIntSafe(val, respawnY);
             roomStateDirty = true;
         });
         TextFieldWidget respawnZBox = new TextFieldWidget(this.textRenderer, 64, 20, Text.literal("Z"));
-        respawnZBox.setText(String.valueOf(respawnZ));
+        respawnZBox.setText(String.valueOf(fillZ));
         respawnZBox.setChangedListener(val -> {
             respawnZ = parseIntSafe(val, respawnZ);
             roomStateDirty = true;
@@ -1332,6 +1363,15 @@ public class EnderDashboard extends EnderBaseScreen {
         if (server == null) {
             return;
         }
+        
+        // Sync MOTD
+        if (this.roomRemark != null) {
+            try {
+                server.setMotd(this.roomRemark);
+            } catch (Exception ignored) {
+            }
+        }
+
         applyRulesToServer();
         enforceAccessControl(server);
     }

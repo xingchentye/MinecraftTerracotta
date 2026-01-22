@@ -6,9 +6,11 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.multiplayer.ender.client.gui.StartupScreen;
 import com.multiplayer.ender.fabric.FabricConfig;
+import com.multiplayer.ender.logic.ProcessLauncher;
 import com.multiplayer.ender.network.EnderApiClient;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.TitleScreen;
@@ -146,6 +148,15 @@ public class MinecraftEnderClient implements ClientModInitializer {
                 checkBackendState();
             }
         });
+        
+        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
+            if (wasHostOk) {
+                LOGGER.info("Detected world disconnect, stopping hosting...");
+                EnderApiClient.setIdle();
+                new Thread(ProcessLauncher::stop, "Ender-Stopper").start();
+                wasHostOk = false;
+            }
+        });
     }
 
     private static void checkBackendState() {
@@ -259,5 +270,3 @@ public class MinecraftEnderClient implements ClientModInitializer {
         });
     }
 }
-
-

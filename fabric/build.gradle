@@ -39,7 +39,7 @@ dependencies {
 	implementation project(':ender_core')
 	
 	include "org.java-websocket:Java-WebSocket:1.5.4"
-	include "org.apache.commons:commons-compress:1.26.0"
+	implementation "org.apache.commons:commons-compress:1.26.0"
 }
 
 processResources {

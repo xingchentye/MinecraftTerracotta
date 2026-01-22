@@ -247,6 +247,16 @@ public class ClientSetupForge {
     }
 
     @SubscribeEvent
+    public static void onClientLogout(net.minecraftforge.client.event.ClientPlayerNetworkEvent.LoggingOut event) {
+        if (wasHostOk) {
+             LOGGER.info("Detected world disconnect, stopping hosting...");
+             EnderApiClient.setIdle();
+             new Thread(com.multiplayer.ender.logic.ProcessLauncher::stop, "Ender-Stopper").start();
+             wasHostOk = false;
+        }
+    }
+
+    @SubscribeEvent
     public static void onTitleScreenInit(ScreenEvent.Init.Post event) {
         if (event.getScreen() instanceof TitleScreen && !hasAutoStarted) {
             hasAutoStarted = true;
