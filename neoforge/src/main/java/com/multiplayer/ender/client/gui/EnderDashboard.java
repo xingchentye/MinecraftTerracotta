@@ -34,7 +34,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.border.WorldBorder;
-import net.minecraft.client.gui.components.ObjectSelectionList;
+
 
 public class EnderDashboard extends EnderBaseScreen {
     private String backendState = Component.translatable("ender.dashboard.status.fetching").getString();
@@ -99,101 +99,6 @@ public class EnderDashboard extends EnderBaseScreen {
         FULL,
         INGAME_INFO,
         INGAME_SETTINGS
-    }
-
-    private class PlayerListWrapperWidget extends AbstractWidget {
-        private final PlayerListScrollWidget list;
-        
-        public PlayerListWrapperWidget(PlayerListScrollWidget list, int width, int height) {
-            super(0, 0, width, height, Component.empty());
-            this.list = list;
-        }
-        
-        @Override
-        public void renderWidget(net.minecraft.client.gui.GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
-            this.list.updateWidgetSize(this.width, this.height, this.getY(), this.getY() + this.height, this.getX());
-            this.list.render(guiGraphics, mouseX, mouseY, partialTick);
-        }
-        
-        @Override
-        public boolean mouseClicked(double mouseX, double mouseY, int button) {
-            return this.list.mouseClicked(mouseX, mouseY, button);
-        }
-        
-        @Override
-        public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
-             return this.list.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount);
-        }
-        
-        @Override
-        public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
-            return this.list.mouseDragged(mouseX, mouseY, button, deltaX, deltaY);
-        }
-        
-        @Override
-        protected void updateWidgetNarration(net.minecraft.client.gui.narration.NarrationElementOutput narrationElementOutput) {}
-    }
-
-    private class PlayerListScrollWidget extends ObjectSelectionList<PlayerListScrollWidget.Entry> {
-        public PlayerListScrollWidget(net.minecraft.client.Minecraft minecraft, int width, int height, int top, int bottom) {
-            super(minecraft, width, height, top, 24);
-        }
-
-        public void updateWidgetSize(int width, int height, int top, int bottom, int left) {
-            this.width = width;
-            this.height = height;
-            this.setX(left);
-            this.setY(top);
-        }
-        
-        public void addItem(String name, String type, Button.OnPress onRemove) {
-            this.addEntry(new Entry(name, type, onRemove));
-        }
-        
-        @Override
-        public int getRowWidth() {
-            return 300;
-        }
-
-        @Override
-        protected int getScrollbarPosition() {
-            return this.getX() + this.width - 6;
-        }
-
-        public class Entry extends ObjectSelectionList.Entry<Entry> {
-             private final String name;
-             private final String type;
-             private final Button removeBtn;
-
-             public Entry(String name, String type, Button.OnPress onRemove) {
-                 this.name = name;
-                 this.type = type;
-                 this.removeBtn = Button.builder(Component.literal("移除"), onRemove).width(40).build();
-             }
-
-             @Override
-             public void render(net.minecraft.client.gui.GuiGraphics guiGraphics, int index, int y, int x, int entryWidth, int entryHeight, int mouseX, int mouseY, boolean hovered, float partialTick) {
-                 guiGraphics.drawString(EnderDashboard.this.font, name, x + 10, y + (entryHeight - 8) / 2, 0xFFFFFF);
-                 guiGraphics.drawString(EnderDashboard.this.font, Component.literal(type).withStyle(net.minecraft.ChatFormatting.GRAY), x + 140, y + (entryHeight - 8) / 2, 0xFFFFFF);
-                 
-                 this.removeBtn.setX(x + 240);
-                 this.removeBtn.setY(y + (entryHeight - 20) / 2);
-                 this.removeBtn.render(guiGraphics, mouseX, mouseY, partialTick);
-             }
-
-             @Override
-             public boolean mouseClicked(double mouseX, double mouseY, int button) {
-                 if (this.removeBtn.mouseClicked(mouseX, mouseY, button)) {
-                     return true;
-                 }
-                 return false;
-             }
-             
-             @Override
-             public Component getNarration() {
-                 return Component.literal(name);
-             }
-        }
     }
 
     public enum RoomPage {
@@ -1003,11 +908,6 @@ public class EnderDashboard extends EnderBaseScreen {
         }).width(200).build();
         permission.addChild(permissionBtn);
 
-        EditBox playerBox = new EditBox(this.font, 0, 0, 200, 20, Component.literal("玩家名"));
-        playerBox.setMaxLength(32);
-        playerBox.setHint(Component.literal("输入玩家名以管理"));
-        permission.addChild(playerBox);
-
         permission.addChild(Button.builder(Component.literal("白名单启用: " + (whitelistEnabled ? "开" : "关")), button -> {
             whitelistEnabled = !whitelistEnabled;
             button.setMessage(Component.literal("白名单启用: " + (whitelistEnabled ? "开" : "关")));
@@ -1015,104 +915,33 @@ public class EnderDashboard extends EnderBaseScreen {
             ClientSetup.showToast(Component.literal("提示"), Component.literal("白名单设置已更新"));
         }).width(200).build());
 
-        LinearLayout listButtons = LinearLayout.horizontal().spacing(6);
-        listButtons.addChild(Button.builder(Component.literal("白名单+"), b -> {
-            String name = playerBox.getValue().trim();
-            if (!name.isEmpty()) {
-                addNameToArray(whitelist, name);
-                roomStateDirty = true;
-                playerBox.setValue("");
-                rebuildRoomPageContent(true);
-                ClientSetup.showToast(Component.literal("提示"), Component.literal("已添加到白名单"));
+        permission.addChild(Button.builder(Component.literal("详细名单管理 (白名单/黑名单/禁言)"), button -> {
+            if (this.minecraft != null) {
+                this.minecraft.setScreen(new RoomListsScreen(this));
             }
-        }).width(60).build());
-        listButtons.addChild(Button.builder(Component.literal("白名单-"), b -> {
-            String name = playerBox.getValue().trim();
-            if (!name.isEmpty()) {
-                removeNameFromArray(whitelist, name);
-                roomStateDirty = true;
-                playerBox.setValue("");
-                rebuildRoomPageContent(true);
-                ClientSetup.showToast(Component.literal("提示"), Component.literal("已从白名单移除"));
-            }
-        }).width(60).build());
-        listButtons.addChild(Button.builder(Component.literal("黑名单+"), b -> {
-            String name = playerBox.getValue().trim();
-            if (!name.isEmpty()) {
-                addNameToArray(blacklist, name);
-                roomStateDirty = true;
-                playerBox.setValue("");
-                rebuildRoomPageContent(true);
-                ClientSetup.showToast(Component.literal("提示"), Component.literal("已添加到黑名单"));
-            }
-        }).width(60).build());
-        listButtons.addChild(Button.builder(Component.literal("禁言+"), b -> {
-            String name = playerBox.getValue().trim();
-            if (!name.isEmpty()) {
-                addNameToArray(muteList, name);
-                roomStateDirty = true;
-                playerBox.setValue("");
-                rebuildRoomPageContent(true);
-                ClientSetup.showToast(Component.literal("提示"), Component.literal("已添加到禁言列表"));
-            }
-        }).width(60).build());
-        permission.addChild(listButtons);
-        permission.addChild(new StringWidget(Component.literal("白名单: " + whitelist.size() + " | 黑名单: " + blacklist.size() + " | 禁言: " + muteList.size()), this.font));
+        }).width(240).build());
 
-        permission.addChild(new ListHeaderWidget(300));
-        
-        int usedHeight = 220; 
-        int availableHeight = this.height - this.layout.getHeaderHeight() - this.layout.getFooterHeight() - 20;
-        int listHeight = Math.max(100, availableHeight - usedHeight - 10);
-        
-        PlayerListScrollWidget scrollWidget = new PlayerListScrollWidget(this.minecraft, 320, listHeight, 0, 0);
-        
-        appendListToScroll(scrollWidget, "白名单", whitelist);
-        appendListToScroll(scrollWidget, "黑名单", blacklist);
-        appendListToScroll(scrollWidget, "禁言列表", muteList);
-        
-        permission.addChild(new PlayerListWrapperWidget(scrollWidget, 320, listHeight));
+        permission.addChild(new StringWidget(Component.literal("当前列表概况:"), this.font));
+        com.google.gson.JsonObject state = EnderApiClient.getRoomManagementStateSync();
+        int wlCount = 0;
+        int blCount = 0;
+        int muteCount = 0;
+        if (state != null) {
+            if (state.has("whitelist") && state.get("whitelist").isJsonArray()) {
+                wlCount = state.getAsJsonArray("whitelist").size();
+            }
+            if (state.has("blacklist") && state.get("blacklist").isJsonArray()) {
+                blCount = state.getAsJsonArray("blacklist").size();
+            }
+            if (state.has("mute_list") && state.get("mute_list").isJsonArray()) {
+                muteCount = state.getAsJsonArray("mute_list").size();
+            }
+        }
+        permission.addChild(new StringWidget(Component.literal("白名单: " + wlCount + " | 黑名单: " + blCount + " | 禁言: " + muteCount), this.font));
 
         content.addChild(permission);
     }
     
-    private void appendListToScroll(PlayerListScrollWidget widget, String title, JsonArray list) {
-        if (list == null || list.size() == 0) return;
-        for (JsonElement el : list) {
-             if (el != null && el.isJsonPrimitive()) {
-                 String name = el.getAsString();
-                 String typeStr = title.replace("列表", "");
-                 widget.addItem(name, typeStr, b -> {
-                    removeNameFromArray(list, name);
-                    roomStateDirty = true;
-                    rebuildRoomPageContent(true);
-                    ClientSetup.showToast(Component.literal("提示"), Component.literal("已从" + title + "移除 " + name));
-                 });
-             }
-        }
-    }
-
-    private class ListHeaderWidget extends AbstractWidget {
-        public ListHeaderWidget(int width) {
-            super(0, 0, width, 20, Component.empty());
-            this.active = false;
-        }
-        @Override
-        public void renderWidget(net.minecraft.client.gui.GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
-             guiGraphics.drawString(EnderDashboard.this.font, Component.literal("游戏名").withStyle(net.minecraft.ChatFormatting.YELLOW), getX() + 10, getY() + 6, 0xFFFFFF);
-             guiGraphics.drawString(EnderDashboard.this.font, Component.literal("名单类型").withStyle(net.minecraft.ChatFormatting.YELLOW), getX() + 140, getY() + 6, 0xFFFFFF);
-             guiGraphics.drawString(EnderDashboard.this.font, Component.literal("操作").withStyle(net.minecraft.ChatFormatting.YELLOW), getX() + 240, getY() + 6, 0xFFFFFF);
-        }
-        @Override
-        protected void updateWidgetNarration(net.minecraft.client.gui.narration.NarrationElementOutput narrationElementOutput) {}
-    }
-
-
-
-
-
-
-
     private boolean pvpAllowed = true;
 
     private void addRulesPage(LinearLayout content) {

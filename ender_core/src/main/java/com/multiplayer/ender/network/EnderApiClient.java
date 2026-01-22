@@ -208,6 +208,7 @@ public class EnderApiClient {
                 
                 next.addProperty("last_updated", System.currentTimeMillis());
                 roomManagementState = next;
+                saveRoomConfig();
             }
         } catch (Exception ignored) {
         }

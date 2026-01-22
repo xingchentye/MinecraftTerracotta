@@ -948,11 +948,6 @@ public class EnderDashboard extends EnderBaseScreen {
             MinecraftEnderClient.showToast(Text.literal("提示"), Text.literal("访客权限已更新"));
         }).width(200).build());
 
-        TextFieldWidget playerBox = new TextFieldWidget(this.textRenderer, 200, 20, Text.literal("玩家名"));
-        playerBox.setMaxLength(32);
-        playerBox.setPlaceholder(Text.literal("输入玩家名以管理"));
-        permission.add(playerBox);
-
         permission.add(net.minecraft.client.gui.widget.ButtonWidget.builder(Text.literal("白名单启用: " + (whitelistEnabled ? "开" : "关")), button -> {
             whitelistEnabled = !whitelistEnabled;
             button.setMessage(Text.literal("白名单启用: " + (whitelistEnabled ? "开" : "关")));
@@ -960,63 +955,29 @@ public class EnderDashboard extends EnderBaseScreen {
             MinecraftEnderClient.showToast(Text.literal("提示"), Text.literal("白名单设置已更新"));
         }).width(200).build());
 
-        DirectionalLayoutWidget listButtons = DirectionalLayoutWidget.horizontal().spacing(6);
-        listButtons.add(net.minecraft.client.gui.widget.ButtonWidget.builder(Text.literal("白名单+"), b -> {
-            String name = playerBox.getText().trim();
-            if (!name.isEmpty()) {
-                addNameToArray(whitelist, name);
-                roomStateDirty = true;
-                playerBox.setText("");
-                roomPageRefreshRequested = true;
-                MinecraftEnderClient.showToast(Text.literal("提示"), Text.literal("已添加到白名单"));
+        permission.add(net.minecraft.client.gui.widget.ButtonWidget.builder(Text.literal("详细名单管理 (白名单/黑名单/禁言)"), button -> {
+            if (this.client != null) {
+                this.client.setScreen(new RoomListsScreen(this));
             }
-        }).width(60).build());
-        listButtons.add(net.minecraft.client.gui.widget.ButtonWidget.builder(Text.literal("白名单-"), b -> {
-            String name = playerBox.getText().trim();
-            if (!name.isEmpty()) {
-                removeNameFromArray(whitelist, name);
-                roomStateDirty = true;
-                playerBox.setText("");
-                roomPageRefreshRequested = true;
-                MinecraftEnderClient.showToast(Text.literal("提示"), Text.literal("已从白名单移除"));
-            }
-        }).width(60).build());
-        listButtons.add(net.minecraft.client.gui.widget.ButtonWidget.builder(Text.literal("黑名单+"), b -> {
-            String name = playerBox.getText().trim();
-            if (!name.isEmpty()) {
-                addNameToArray(blacklist, name);
-                roomStateDirty = true;
-                playerBox.setText("");
-                roomPageRefreshRequested = true;
-                MinecraftEnderClient.showToast(Text.literal("提示"), Text.literal("已添加到黑名单"));
-            }
-        }).width(60).build());
-        listButtons.add(net.minecraft.client.gui.widget.ButtonWidget.builder(Text.literal("禁言+"), b -> {
-            String name = playerBox.getText().trim();
-            if (!name.isEmpty()) {
-                addNameToArray(muteList, name);
-                roomStateDirty = true;
-                playerBox.setText("");
-                roomPageRefreshRequested = true;
-                MinecraftEnderClient.showToast(Text.literal("提示"), Text.literal("已添加到禁言列表"));
-            }
-        }).width(60).build());
-        permission.add(listButtons);
-        permission.add(new TextWidget(Text.literal("白名单: " + whitelist.size() + " | 黑名单: " + blacklist.size() + " | 黑名单: " + blacklist.size() + " | 禁言: " + muteList.size()), this.textRenderer));
+        }).width(240).build());
 
-        permission.add(new ListHeaderWidget(300));
-        
-        int usedHeight = 220; 
-        int availableHeight = this.height - this.layout.getHeaderHeight() - this.layout.getFooterHeight() - 20;
-        int listHeight = Math.max(100, availableHeight - usedHeight - 10);
-        
-        PlayerListScrollWidget scrollWidget = new PlayerListScrollWidget(this.client, 320, listHeight, 0, 0);
-        
-        appendListToScroll(scrollWidget, "白名单", whitelist);
-        appendListToScroll(scrollWidget, "黑名单", blacklist);
-        appendListToScroll(scrollWidget, "禁言列表", muteList);
-        
-        permission.add(new PlayerListWrapperWidget(scrollWidget, 320, listHeight));
+        permission.add(new TextWidget(Text.literal("当前列表概况:"), this.textRenderer));
+        com.google.gson.JsonObject state = EnderApiClient.getRoomManagementStateSync();
+        int wlCount = 0;
+        int blCount = 0;
+        int muteCount = 0;
+        if (state != null) {
+            if (state.has("whitelist") && state.get("whitelist").isJsonArray()) {
+                wlCount = state.getAsJsonArray("whitelist").size();
+            }
+            if (state.has("blacklist") && state.get("blacklist").isJsonArray()) {
+                blCount = state.getAsJsonArray("blacklist").size();
+            }
+            if (state.has("mute_list") && state.get("mute_list").isJsonArray()) {
+                muteCount = state.getAsJsonArray("mute_list").size();
+            }
+        }
+        permission.add(new TextWidget(Text.literal("白名单: " + wlCount + " | 黑名单: " + blCount + " | 禁言: " + muteCount), this.textRenderer));
 
         content.add(permission);
     }

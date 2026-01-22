@@ -45,8 +45,12 @@ public class RoomInfoScreen extends EnderBaseScreen {
         contentLayout.add(new TextWidget(Text.literal("房间号: " + roomCode), this.textRenderer));
 
         java.util.List<String> members = extractMembers(lastStateJson);
-        String memberLine = members.isEmpty() ? "暂无" : String.join(", ", members);
-        contentLayout.add(new TextWidget(Text.literal("成员: " + memberLine), this.textRenderer));
+        contentLayout.add(new TextWidget(Text.literal("成员数: " + members.size()), this.textRenderer));
+        contentLayout.add(ButtonWidget.builder(Text.literal("详细列表"), b -> {
+            if (this.client != null) {
+                this.client.setScreen(new RoomListsScreen(this));
+            }
+        }).width(120).build());
 
         this.layout.addBody(contentLayout);
 
