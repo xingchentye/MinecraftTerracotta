@@ -24,6 +24,10 @@ import net.minecraftforge.client.event.ScreenEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
+/**
+ * 游戏内菜单处理器（Forge）。
+ * 在游戏暂停菜单（ESC 菜单）添加房间信息和管理按钮。
+ */
 @Mod.EventBusSubscriber(modid = "ender_online", value = Dist.CLIENT, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class InGameMenuHandlerForge {
     private static final Gson GSON = new Gson();
@@ -31,6 +35,13 @@ public class InGameMenuHandlerForge {
     private static JsonObject lastState = null;
     private static long lastCreateClickTime = 0;
 
+    /**
+     * 屏幕初始化后事件。
+     * 在 PauseScreen 中添加“显示信息”、“房间设置”或“创建房间”按钮。
+     * 根据当前的联机状态动态显示不同的按钮。
+     *
+     * @param event 屏幕初始化事件
+     */
     @SubscribeEvent
     public static void onScreenInit(ScreenEvent.Init.Post event) {
         if (event.getScreen() instanceof PauseScreen screen) {

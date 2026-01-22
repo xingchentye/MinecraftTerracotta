@@ -137,7 +137,7 @@ public class EnderDashboard extends EnderBaseScreen {
             if (clipboard != null) {
                 clipboard = clipboard.trim();
                 if (!clipboard.isEmpty() && !clipboard.equals(lastClipboard)) {
-                    // Match standard 4-part room code: U/XXXX-XXXX-XXXX-XXXX
+                    
                     if (clipboard.matches("^U/[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$")) {
                         lastClipboard = clipboard;
                         String finalClipboard = clipboard;
@@ -151,16 +151,20 @@ public class EnderDashboard extends EnderBaseScreen {
         }
     }
 
+    /**
+     * 初始化界面内容。
+     * 根据当前状态决定显示闲置界面还是连接界面。
+     */
     @Override
     protected void initContent() {
-        // Fix: Sync static UI state with actual backend state on init
+        
         EnderApiClient.State realState = EnderApiClient.getCurrentState();
         if (realState == EnderApiClient.State.IDLE) {
             wasConnected = false;
             lastStateJson = null;
         } else if (realState == EnderApiClient.State.HOSTING || realState == EnderApiClient.State.JOINING) {
             wasConnected = true;
-            // If the cached JSON contradicts the real state, clear it to force a refresh
+            
             if (lastStateJson != null && lastStateJson.has("state")) {
                 String cachedState = lastStateJson.get("state").getAsString();
                 boolean cachedIsHost = "host-ok".equals(cachedState);
@@ -288,7 +292,7 @@ public class EnderDashboard extends EnderBaseScreen {
     }
 
     private void initGuestConnectedContent() {
-        // Footer
+        
         LinearLayout footerLayout = LinearLayout.horizontal().spacing(10);
         
         footerLayout.addChild(Button.builder(Component.literal("断开连接"), b -> {
@@ -303,7 +307,7 @@ public class EnderDashboard extends EnderBaseScreen {
         
         this.layout.addToFooter(footerLayout);
 
-        // Manual Body Layout
+        
         int headerHeight = this.layout.getHeaderHeight() + 10;
         int footerHeight = this.layout.getFooterHeight() + 10;
         
@@ -764,7 +768,7 @@ public class EnderDashboard extends EnderBaseScreen {
     }
 
     private void initRoomManagementContent() {
-        // Ensure roomRemark is synced from state before rendering
+        
         if (roomRemark == null || roomRemark.isEmpty()) {
             JsonObject state = EnderApiClient.getRoomManagementStateSync();
             if (state != null && state.has("room_remark")) {
@@ -773,9 +777,9 @@ public class EnderDashboard extends EnderBaseScreen {
         }
 
         int menuWidth = 120;
-        int spacing = 30; // Increased spacing
+        int spacing = 30; 
         int contentX = menuWidth + spacing;
-        int contentWidth = this.width - contentX - 10; // Right margin 10
+        int contentWidth = this.width - contentX - 10; 
 
         LinearLayout menu = LinearLayout.vertical().spacing(6);
         menu.defaultCellSetting().alignHorizontallyLeft();
@@ -785,20 +789,20 @@ public class EnderDashboard extends EnderBaseScreen {
         }
         updateRoomPageMenuButtons();
         
-        // Manually position menu
+        
         menu.arrangeElements();
-        menu.setPosition(10, this.layout.getHeaderHeight() + 10); // Left margin 10
+        menu.setPosition(10, this.layout.getHeaderHeight() + 10); 
 
         this.roomPagePanel = new RoomPagePanel(contentWidth, this.height - this.layout.getHeaderHeight() - this.layout.getFooterHeight() - 20);
         this.roomPagePanel.setPosition(contentX, this.layout.getHeaderHeight() + 10);
         
         rebuildRoomPageContent(false);
         
-        // We do NOT add these to layout.contentsFrame because we want manual positioning
-        // But we need to register widgets.
-        // For menu buttons:
+        
+        
+        
         menu.visitWidgets(this::addRenderableWidget);
-        // For panel content: done in rebuildRoomPageContent
+        
     }
 
     private void addRoomPageMenuButton(LinearLayout menu, RoomPage page, int width) {
@@ -827,15 +831,15 @@ public class EnderDashboard extends EnderBaseScreen {
         if (roomPagePanel == null) {
             return;
         }
-        // Always remove old widgets from screen, regardless of registerWidgets flag
-        // This is critical to prevent UI overlap when switching pages
+        
+        
         for (AbstractWidget widget : roomPageWidgets) {
             this.removeWidget(widget);
         }
         
         roomPageWidgets.clear();
         LinearLayout pageContent = LinearLayout.vertical().spacing(12);
-        pageContent.defaultCellSetting().alignHorizontallyCenter(); // Or align left depending on design
+        pageContent.defaultCellSetting().alignHorizontallyCenter(); 
         switch (currentRoomPage) {
             case OVERVIEW -> addOverviewPage(pageContent);
             case PERMISSIONS -> addPermissionsPage(pageContent);
@@ -846,7 +850,7 @@ public class EnderDashboard extends EnderBaseScreen {
         }
         roomPagePanel.setContent(pageContent);
         
-        // Manually arrange the new content to ensure positions are correct immediately
+        
         roomPagePanel.arrangeElements();
         
         pageContent.visitWidgets(widget -> {
@@ -856,24 +860,24 @@ public class EnderDashboard extends EnderBaseScreen {
             }
         });
         
-        // If we are in the initial init phase (registerWidgets=false), the widgets will be added later by the caller 
-        // (but wait, visitWidgets above only adds if registerWidgets is true).
-        // Actually, in initRoomManagementContent, we need to add them.
-        // Let's fix the logic:
-        // If registerWidgets is false, we just collect them into roomPageWidgets? 
-        // No, in initRoomManagementContent we didn't call addRenderableWidget for panel content.
-        // We should probably always add them here if the screen is initialized.
-        // But initRoomManagementContent is called during init().
-        // If called from init(), we should add them to this.renderables (via addRenderableWidget).
+        
+        
+        
+        
+        
+        
+        
+        
+        
         
         if (!registerWidgets) {
-             // If called from init(), we must add them now because we are NOT adding roomPagePanel to layout
+             
              for (AbstractWidget widget : roomPageWidgets) {
                  this.addRenderableWidget(widget);
              }
         }
         
-        // No need to call repositionElements() for the whole screen if we just updated this panel
+        
     }
 
     private String getRoomPageTitle(RoomPage page) {
@@ -915,7 +919,7 @@ public class EnderDashboard extends EnderBaseScreen {
                 layout.arrangeElements();
             }
             if (content != null) {
-                // Center the content horizontally within this panel
+                
                 int contentW = content.getWidth();
                 int offset = (this.fixedWidth - contentW) / 2;
                 content.setPosition(this.getX() + offset, this.getY());
@@ -1006,11 +1010,11 @@ public class EnderDashboard extends EnderBaseScreen {
                  guiGraphics.drawString(EnderDashboard.this.font, displayName, x + 10, y + (entryHeight - 8) / 2, color);
                  guiGraphics.drawString(EnderDashboard.this.font, Component.literal(type).withStyle(net.minecraft.ChatFormatting.GRAY), x + 140, y + (entryHeight - 8) / 2, 0xFFFFFF);
                  
-                 int statusColor = 0x55FF55; // Green
+                 int statusColor = 0x55FF55; 
                  if ("[未连接]".equals(status)) {
-                     statusColor = 0xFF5555; // Red
+                     statusColor = 0xFF5555; 
                  } else if ("[连接中]".equals(status)) {
-                     statusColor = 0xFFFF55; // Yellow
+                     statusColor = 0xFFFF55; 
                  }
                  guiGraphics.drawString(EnderDashboard.this.font, Component.literal(status).withStyle(net.minecraft.ChatFormatting.GRAY), x + 200, y + (entryHeight - 8) / 2, statusColor);
              }
@@ -1054,12 +1058,12 @@ public class EnderDashboard extends EnderBaseScreen {
         remarkBox.setHint(Component.literal("房间描述 (MOTD)"));
         remarkBox.setResponder(val -> {
             roomRemark = val;
-            // Don't set dirty immediately on typing, use save button
+            
         });
         remarkBox.setEditable(isHostConnected());
         remarkLayout.addChild(remarkBox);
         Button saveBtn = Button.builder(Component.literal("保存"), b -> {
-            // Apply the current value from the box to roomRemark before saving
+            
             roomRemark = remarkBox.getValue();
             roomStateDirty = true;
             ClientSetup.showToast(Component.literal("提示"), Component.literal("房间描述已保存"));
@@ -1192,7 +1196,7 @@ public class EnderDashboard extends EnderBaseScreen {
         LinearLayout world = LinearLayout.vertical().spacing(6);
         world.defaultCellSetting().alignHorizontallyCenter();
 
-        // Auto-fill coordinates from player position
+        
         int fillX = respawnX;
         int fillY = respawnY;
         int fillZ = respawnZ;
@@ -1375,7 +1379,7 @@ public class EnderDashboard extends EnderBaseScreen {
             return;
         }
         
-        // Sync MOTD
+        
         if (this.roomRemark != null) {
             try {
                 server.setMotd(this.roomRemark);

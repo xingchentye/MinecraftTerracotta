@@ -14,28 +14,71 @@ import java.util.Collections;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
+/**
+ * EasyTier 管理器类。
+ * 负责 EasyTier 实例的初始化、配置加载、启动、停止以及文件迁移。
+ *
+ * @author Ender Developer
+ * @version 1.0
+ * @since 1.0
+ */
 public class EasyTierManager {
+    /**
+     * 日志记录器
+     */
     private static final Logger LOGGER = LoggerFactory.getLogger(EasyTierManager.class);
+    
+    /**
+     * 单例实例
+     */
     private static EasyTierManager instance;
+    
+    /**
+     * 下载器实例
+     */
     private final EasyTierDownloader downloader;
+    
+    /**
+     * 运行器实例
+     */
     private EasyTierRunner runner;
+    
+    /**
+     * 工作目录
+     */
     private final Path workDir;
+    
+    /**
+     * 配置对象
+     */
     private EasyTierConfig config;
+    
+    /**
+     * GSON 实例
+     */
     private final Gson gson = new GsonBuilder().setPrettyPrinting().create();
 
+    /**
+     * 私有构造函数。
+     *
+     * @param workDir 工作目录
+     */
     private EasyTierManager(Path workDir) {
         this.workDir = workDir;
         this.downloader = new EasyTierDownloader(workDir);
         migrateOldFiles();
     }
 
+    /**
+     * 迁移旧版本的文件到新目录。
+     */
     private void migrateOldFiles() {
         try {
             if (!Files.exists(workDir)) {
                 Files.createDirectories(workDir);
             }
 
-            // Migrate easytier_config.json
+            
             Path oldConfig = Paths.get("easytier_config.json");
             Path newConfig = workDir.resolve("easytier_config.json");
             if (Files.exists(oldConfig)) {
@@ -47,7 +90,7 @@ public class EasyTierManager {
                 }
             }
 
-            // Migrate easytier directory
+            
             Path oldDir = Paths.get("easytier");
             Path newDir = workDir.resolve("easytier");
             if (Files.exists(oldDir) && Files.isDirectory(oldDir)) {
@@ -59,7 +102,7 @@ public class EasyTierManager {
                         LOGGER.warn("Failed to migrate easytier directory", e);
                     }
                 } else {
-                    // If target exists, delete source to clean up
+                    
                     try (java.util.stream.Stream<Path> walk = Files.walk(oldDir)) {
                         walk.sorted(java.util.Comparator.reverseOrder())
                                 .map(Path::toFile)
@@ -75,14 +118,24 @@ public class EasyTierManager {
         }
     }
 
+    /**
+     * 获取 EasyTierManager 的单例实例。
+     *
+     * @return 单例实例
+     */
     public static synchronized EasyTierManager getInstance() {
         if (instance == null) {
-            // Default path, relative to working directory
+            
             instance = new EasyTierManager(Paths.get("ender_core_data"));
         }
         return instance;
     }
 
+    /**
+     * 初始化 EasyTierManager。
+     *
+     * @param workDir 工作目录
+     */
     public static synchronized void init(Path workDir) {
         if (instance == null) {
             instance = new EasyTierManager(workDir);
@@ -91,24 +144,35 @@ public class EasyTierManager {
         }
     }
 
+    /**
+     * 异步初始化 EasyTier（下载并解压）。
+     *
+     * @return 完成时无返回值的 CompletableFuture
+     */
     public CompletableFuture<Void> initialize() {
         return initialize(null);
     }
 
+    /**
+     * 异步初始化 EasyTier（下载并解压），带进度回调。
+     *
+     * @param progressCallback 进度回调函数
+     * @return 完成时无返回值的 CompletableFuture
+     */
     public CompletableFuture<Void> initialize(Consumer<Double> progressCallback) {
         return CompletableFuture.runAsync(() -> {
             try {
                 LOGGER.info("Initializing EasyTier...");
-                loadConfig(); // Load config during initialization
+                loadConfig(); 
                 Path installDir = downloader.downloadAndExtract(progressCallback);
-                // The downloader now returns the base dir, and files are extracted there
-                // But we need to handle if it is in a subdirectory (which downloadAndExtract tries to do)
-                // However, our downloader change made it return the directory containing the executable.
                 
-                // Let's just find the executable in installDir
+                
+                
+                
+                
                 Path executable = installDir.resolve(isWindows() ? "easytier-core.exe" : "easytier-core");
                 
-                // If not found directly, check if it's inside a subdirectory (e.g. from zip extraction)
+                
                 if (!Files.exists(executable)) {
                      try (var stream = Files.walk(installDir, 2)) {
                          Path found = stream.filter(p -> p.getFileName().toString().equals(isWindows() ? "easytier-core.exe" : "easytier-core"))
@@ -128,6 +192,9 @@ public class EasyTierManager {
         });
     }
 
+    /**
+     * 加载配置文件。
+     */
     public void loadConfig() {
         Path configPath = workDir.resolve("easytier_config.json");
         if (Files.exists(configPath)) {
@@ -135,7 +202,7 @@ public class EasyTierManager {
                 String json = Files.readString(configPath);
                 config = gson.fromJson(json, EasyTierConfig.class);
                 
-                // Migration: Remove old peer
+                
                 if (config.peers != null) {
                     boolean removed = config.peers.removeIf(p -> p.contains("etnode.zkitefly.eu.org"));
                     if (removed) {
@@ -152,6 +219,9 @@ public class EasyTierManager {
         }
     }
 
+    /**
+     * 保存配置文件。
+     */
     public void saveConfig() {
         try {
             if (!Files.exists(workDir)) {
@@ -164,6 +234,11 @@ public class EasyTierManager {
         }
     }
 
+    /**
+     * 获取当前配置对象。
+     *
+     * @return 配置对象
+     */
     public EasyTierConfig getConfig() {
         if (config == null) {
             loadConfig();
@@ -171,24 +246,42 @@ public class EasyTierManager {
         return config;
     }
 
+    /**
+     * 检查 EasyTier 是否已初始化（运行器是否就绪）。
+     *
+     * @return 如果已初始化则返回 true，否则返回 false
+     */
     public boolean isInitialized() {
         return runner != null;
     }
 
+    /**
+     * 使用指定的网络名称和密钥启动 EasyTier。
+     *
+     * @param networkName 网络名称
+     * @param networkSecret 网络密钥
+     * @throws IOException 当启动失败时抛出
+     */
     public void start(String networkName, String networkSecret) throws IOException {
         EasyTierConfig cfg = getConfig();
         cfg.networkName = networkName;
         cfg.networkSecret = networkSecret;
-        // Don't save transient room info to disk, just use in memory for start
+        
         start(cfg);
     }
 
+    /**
+     * 使用指定的配置对象启动 EasyTier。
+     *
+     * @param config 配置对象
+     * @throws IOException 当启动失败时抛出
+     */
     public void start(EasyTierConfig config) throws IOException {
         if (runner == null) {
             throw new IllegalStateException("EasyTier not initialized. Call initialize() first.");
         }
 
-        // Dynamic RPC port check
+        
         if (config.rpcPort > 0 && !isPortAvailable(config.rpcPort)) {
             LOGGER.warn("RPC Port {} is in use, finding a new one...", config.rpcPort);
             int newPort = findAvailablePort();
@@ -210,6 +303,11 @@ public class EasyTierManager {
         runner.start(args.toArray(new String[0]), env);
     }
 
+    /**
+     * 查找一个可用的本地端口。
+     *
+     * @return 可用端口号，如果查找失败则返回 -1
+     */
     private int findAvailablePort() {
         try (java.net.ServerSocket socket = new java.net.ServerSocket(0)) {
             return socket.getLocalPort();
@@ -219,6 +317,12 @@ public class EasyTierManager {
         }
     }
 
+    /**
+     * 检查指定端口是否可用。
+     *
+     * @param port 端口号
+     * @return 如果端口可用则返回 true，否则返回 false
+     */
     private boolean isPortAvailable(int port) {
         try (java.net.ServerSocket socket = new java.net.ServerSocket(port)) {
             return true;
@@ -227,6 +331,12 @@ public class EasyTierManager {
         }
     }
 
+    /**
+     * 使用原始参数启动 EasyTier。
+     *
+     * @param args 启动参数
+     * @throws IOException 当启动失败时抛出
+     */
     public void start(String... args) throws IOException {
         if (runner == null) {
             throw new IllegalStateException("EasyTier not initialized. Call initialize() first.");
@@ -234,12 +344,20 @@ public class EasyTierManager {
         runner.start(args);
     }
 
+    /**
+     * 停止 EasyTier 进程。
+     */
     public void stop() {
         if (runner != null) {
             runner.stop();
         }
     }
     
+    /**
+     * 获取当前对等节点列表。
+     *
+     * @return 对等节点 ID 列表
+     */
     public List<String> getPeers() {
         if (runner != null) {
             return runner.getPeers();
@@ -247,6 +365,11 @@ public class EasyTierManager {
         return Collections.emptyList();
     }
     
+    /**
+     * 获取对等节点主机名映射。
+     *
+     * @return 节点 ID 到主机名的映射
+     */
     public java.util.Map<String, String> getPeerHostnames() {
         if (runner != null) {
             return runner.getPeerHostnames();
@@ -254,6 +377,11 @@ public class EasyTierManager {
         return Collections.emptyMap();
     }
 
+    /**
+     * 获取对等节点 IP 映射。
+     *
+     * @return 节点 ID 到 IP 地址的映射
+     */
     public java.util.Map<String, String> getPeerIps() {
         if (runner != null) {
             return runner.getPeerIps();
@@ -261,10 +389,18 @@ public class EasyTierManager {
         return Collections.emptyMap();
     }
     
+    /**
+     * 检查当前操作系统是否为 Windows。
+     *
+     * @return 如果是 Windows 则返回 true，否则返回 false
+     */
     private boolean isWindows() {
         return System.getProperty("os.name").toLowerCase().contains("win");
     }
 
+    /**
+     * 终止所有现有的 EasyTier 进程。
+     */
     private void killAllExistingInstances() {
         LOGGER.info("Cleaning up existing EasyTier processes...");
         try {

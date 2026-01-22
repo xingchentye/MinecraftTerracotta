@@ -11,16 +11,36 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.NotNull;
 
+/**
+ * 创建房间界面。
+ * 允许玩家启动房间托管并生成联机码。
+ *
+ * @author Ender Developer
+ * @version 1.0
+ * @since 1.0
+ */
 public class HostScreen extends EnderBaseScreen {
+    /** 当前状态文本 */
     private Component statusText = Component.translatable("ender.host.status.ready");
+    /** 房间联机码 */
     private String roomCode = "";
+    /** 是否正在处理请求 */
     private boolean isWorking = false;
+    /** 是否保持连接 */
     private boolean keepConnection = false;
+    /** 开始按钮 */
     private Button startBtn;
+    /** 上次状态检查时间戳 */
     private long lastStateCheck = 0;
+    /** 上次点击时间戳（防止双击） */
     private long lastClickTime = 0;
     private static final Gson GSON = new Gson();
 
+    /**
+     * 构造函数。
+     *
+     * @param parent 父屏幕
+     */
     public HostScreen(Screen parent) {
         super(Component.translatable("ender.host.title"), parent);
     }
@@ -41,6 +61,10 @@ public class HostScreen extends EnderBaseScreen {
         this.layout.addToContents(contentLayout);
     }
 
+    /**
+     * 开始托管房间。
+     * 发送创建请求到后端。
+     */
     private void startHosting() {
         long now = System.currentTimeMillis();
         if (now - lastClickTime < 300) return;
@@ -80,6 +104,10 @@ public class HostScreen extends EnderBaseScreen {
         }
     }
 
+    /**
+     * 检查托管状态。
+     * 轮询后端以确认房间是否创建成功。
+     */
     private void checkHostStatus() {
         EnderApiClient.getState().thenAccept(stateJson -> {
             if (stateJson == null) return;

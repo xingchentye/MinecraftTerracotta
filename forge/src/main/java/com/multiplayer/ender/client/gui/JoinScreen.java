@@ -14,6 +14,10 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.NotNull;
 
+/**
+ * 加入房间屏幕。
+ * 允许玩家输入房间号并加入联机游戏。
+ */
 public class JoinScreen extends EnderBaseScreen {
     private EditBox roomCodeBox;
     private Component statusText = Component.translatable("ender.join.status.enter_code");
@@ -29,11 +33,22 @@ public class JoinScreen extends EnderBaseScreen {
         super(Component.translatable("ender.join.title"), parent);
     }
 
+    /**
+     * 构造函数。
+     *
+     * @param parent 父屏幕
+     * @param autoJoinCode 自动填充的房间号（可选）
+     */
     public JoinScreen(Screen parent, String autoJoinCode) {
         this(parent);
         this.autoJoinCode = autoJoinCode;
     }
 
+    /**
+     * 初始化内容。
+     * 创建房间号输入框、加入按钮和返回按钮。
+     * 如果提供了自动加入代码，则自动填充。
+     */
     @Override
     protected void initContent() {
         LinearLayout contentLayout = LinearLayout.vertical().spacing(12);
@@ -61,6 +76,10 @@ public class JoinScreen extends EnderBaseScreen {
         }
     }
 
+    /**
+     * 尝试加入房间。
+     * 校验房间号是否为空，然后向后台发起加入请求。
+     */
     private void joinRoom() {
         String roomCode = roomCodeBox.getValue();
         if (roomCode.isEmpty()) {
@@ -91,6 +110,12 @@ public class JoinScreen extends EnderBaseScreen {
         });
     }
 
+    /**
+     * 执行加入请求。
+     *
+     * @param roomCode 房间号
+     * @param playerName 玩家名称
+     */
     private void doJoinRequest(String roomCode, String playerName) {
         EnderApiClient.joinRoom(roomCode, playerName).thenAccept(success -> {
             if (success) {

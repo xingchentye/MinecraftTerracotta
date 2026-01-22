@@ -14,15 +14,40 @@ import java.util.Objects;
 
 import com.endercore.core.comm.protocol.CoreResponse;
 
+/**
+ * Minecraft 核心工具类。
+ * 提供 Minecraft 服务器状态查询功能的工具类，支持通过 WebSocket 请求查询 Minecraft 服务器状态。
+ *
+ * @author Ender Developer
+ * @version 1.0
+ * @since 1.0
+ */
 public final class CoreMinecraft {
+    /**
+     * 私有构造函数，防止实例化。
+     */
     private CoreMinecraft() {
     }
 
+    /**
+     * 在 CoreWebSocketServer 上注册 Minecraft 查询服务。
+     * 注册 "mc:query_status" 请求处理器。
+     *
+     * @param server CoreWebSocketServer 实例
+     */
     public static void install(CoreWebSocketServer server) {
         Objects.requireNonNull(server, "server");
         server.register("mc:query_status", CoreMinecraft::queryStatus);
     }
 
+    /**
+     * 处理状态查询请求。
+     * 解析请求参数，查询 Minecraft 服务器状态，并返回 JSON 响应和延迟。
+     *
+     * @param req 核心请求对象
+     * @return 核心响应对象
+     * @throws Exception 当查询失败时抛出
+     */
     private static CoreResponse queryStatus(CoreRequest req) throws Exception {
         QueryArgs args;
         try {
@@ -51,10 +76,26 @@ public final class CoreMinecraft {
         return new CoreResponse(0, req.requestId(), req.kind(), baos.toByteArray());
     }
 
+    /**
+     * 构建错误响应。
+     *
+     * @param req 原始请求
+     * @param status 状态码
+     * @param messageUtf8 错误消息
+     * @return 错误响应对象
+     */
     private static CoreResponse error(CoreRequest req, int status, String messageUtf8) {
         return new CoreResponse(status, req.requestId(), req.kind(), messageUtf8.getBytes(StandardCharsets.UTF_8));
     }
 
+    /**
+     * 解析查询参数。
+     * 支持二进制格式和字符串格式（Host:Port|Timeout）。
+     *
+     * @param payload 请求负载
+     * @return 查询参数对象
+     * @throws Exception 当参数解析失败时抛出
+     */
     private static QueryArgs parseArgs(byte[] payload) throws Exception {
         if (payload == null || payload.length == 0) {
             throw new IllegalArgumentException("empty");
@@ -106,6 +147,13 @@ public final class CoreMinecraft {
         return new QueryArgs(host, port, timeoutMillis);
     }
 
+    /**
+     * 尝试解析二进制格式的查询参数。
+     * 格式：HostLength(2) + HostBytes + Port(2) + Timeout(4)
+     *
+     * @param payload 请求负载
+     * @return 查询参数对象，如果解析失败返回 null
+     */
     private static QueryArgs tryParseBinary(byte[] payload) {
         try {
             DataInputStream in = new DataInputStream(new ByteArrayInputStream(payload));
@@ -133,6 +181,16 @@ public final class CoreMinecraft {
         }
     }
 
+    /**
+     * 执行 Minecraft 服务器状态 Ping 操作。
+     *
+     * @param host 主机名
+     * @param port 端口
+     * @param timeoutMillis 超时时间
+     * @param pingId Ping ID
+     * @return 查询结果
+     * @throws Exception 当 Ping 失败时抛出
+     */
     private static QueryResult ping(String host, int port, long timeoutMillis, long pingId) throws Exception {
         try (Socket socket = new Socket()) {
             socket.connect(new InetSocketAddress(host, port), (int) timeoutMillis);
@@ -155,6 +213,14 @@ public final class CoreMinecraft {
         }
     }
 
+    /**
+     * 发送握手包。
+     *
+     * @param out 输出流
+     * @param host 主机名
+     * @param port 端口
+     * @throws Exception 当发送失败时抛出
+     */
     private static void sendHandshake(OutputStream out, String host, int port) throws Exception {
         ByteArrayOutputStream body = new ByteArrayOutputStream();
         writeVarInt(body, 0);
@@ -166,12 +232,25 @@ public final class CoreMinecraft {
         sendPacket(out, body.toByteArray());
     }
 
+    /**
+     * 发送状态请求包。
+     *
+     * @param out 输出流
+     * @throws Exception 当发送失败时抛出
+     */
     private static void sendStatusRequest(OutputStream out) throws Exception {
         ByteArrayOutputStream body = new ByteArrayOutputStream();
         writeVarInt(body, 0);
         sendPacket(out, body.toByteArray());
     }
 
+    /**
+     * 读取状态响应。
+     *
+     * @param in 输入流
+     * @return 状态响应 JSON 字符串
+     * @throws Exception 当读取失败时抛出
+     */
     private static String readStatusResponse(InputStream in) throws Exception {
         int packetLen = readVarInt(in);
         byte[] packet = readFully(in, packetLen);
@@ -183,6 +262,13 @@ public final class CoreMinecraft {
         return readMcString(data);
     }
 
+    /**
+     * 发送 Ping 包。
+     *
+     * @param out 输出流
+     * @param pingId Ping ID
+     * @throws Exception 当发送失败时抛出
+     */
     private static void sendPing(OutputStream out, long pingId) throws Exception {
         ByteArrayOutputStream body = new ByteArrayOutputStream();
         writeVarInt(body, 1);
@@ -191,6 +277,12 @@ public final class CoreMinecraft {
         sendPacket(out, body.toByteArray());
     }
 
+    /**
+     * 读取 Pong 包。
+     *
+     * @param in 输入流
+     * @throws Exception 当读取失败时抛出
+     */
     private static void readPong(InputStream in) throws Exception {
         int packetLen = readVarInt(in);
         byte[] packet = readFully(in, packetLen);
@@ -202,6 +294,14 @@ public final class CoreMinecraft {
         data.readLong();
     }
 
+    /**
+     * 发送数据包。
+     * 格式：PacketLength(VarInt) + PacketBody
+     *
+     * @param out 输出流
+     * @param body 数据包体
+     * @throws Exception 当发送失败时抛出
+     */
     private static void sendPacket(OutputStream out, byte[] body) throws Exception {
         ByteArrayOutputStream packet = new ByteArrayOutputStream();
         writeVarInt(packet, body.length);
@@ -210,12 +310,27 @@ public final class CoreMinecraft {
         out.flush();
     }
 
+    /**
+     * 写入 Minecraft 字符串。
+     * 格式：Length(VarInt) + StringBytes
+     *
+     * @param out 输出流
+     * @param s 字符串
+     * @throws Exception 当写入失败时抛出
+     */
     private static void writeMcString(ByteArrayOutputStream out, String s) throws Exception {
         byte[] bytes = s.getBytes(StandardCharsets.UTF_8);
         writeVarInt(out, bytes.length);
         out.write(bytes);
     }
 
+    /**
+     * 读取 Minecraft 字符串。
+     *
+     * @param in 输入流
+     * @return 字符串
+     * @throws Exception 当读取失败时抛出
+     */
     private static String readMcString(DataInputStream in) throws Exception {
         int len = readVarInt(in);
         if (len < 0 || len > 1_048_576) {
@@ -226,6 +341,12 @@ public final class CoreMinecraft {
         return new String(bytes, StandardCharsets.UTF_8);
     }
 
+    /**
+     * 写入 VarInt。
+     *
+     * @param out 输出流
+     * @param value 整数值
+     */
     private static void writeVarInt(ByteArrayOutputStream out, int value) {
         int v = value;
         while ((v & 0xFFFFFF80) != 0) {
@@ -235,6 +356,13 @@ public final class CoreMinecraft {
         out.write(v & 0x7F);
     }
 
+    /**
+     * 读取 VarInt。
+     *
+     * @param in 输入流
+     * @return 整数值
+     * @throws Exception 当读取失败时抛出
+     */
     private static int readVarInt(InputStream in) throws Exception {
         int numRead = 0;
         int result = 0;
@@ -254,6 +382,13 @@ public final class CoreMinecraft {
         return result;
     }
 
+    /**
+     * 读取 VarInt (DataInputStream)。
+     *
+     * @param in 输入流
+     * @return 整数值
+     * @throws Exception 当读取失败时抛出
+     */
     private static int readVarInt(DataInputStream in) throws Exception {
         int numRead = 0;
         int result = 0;
@@ -270,6 +405,14 @@ public final class CoreMinecraft {
         return result;
     }
 
+    /**
+     * 读取指定长度的字节。
+     *
+     * @param in 输入流
+     * @param len 长度
+     * @return 字节数组
+     * @throws Exception 当读取失败时抛出
+     */
     private static byte[] readFully(InputStream in, int len) throws Exception {
         if (len < 0) {
             throw new IllegalArgumentException("len<0");
@@ -286,11 +429,21 @@ public final class CoreMinecraft {
         return bytes;
     }
 
+    /**
+     * 查询参数类。
+     */
     private static final class QueryArgs {
         private final String host;
         private final int port;
         private final long timeoutMillis;
 
+        /**
+         * 构造函数。
+         *
+         * @param host 主机名
+         * @param port 端口
+         * @param timeoutMillis 超时时间
+         */
         private QueryArgs(String host, int port, long timeoutMillis) {
             this.host = host;
             this.port = port;
@@ -298,10 +451,19 @@ public final class CoreMinecraft {
         }
     }
 
+    /**
+     * 查询结果类。
+     */
     private static final class QueryResult {
         private final String json;
         private final long latencyMillis;
 
+        /**
+         * 构造函数。
+         *
+         * @param json 状态响应 JSON
+         * @param latencyMillis 延迟（毫秒）
+         */
         private QueryResult(String json, long latencyMillis) {
             this.json = json;
             this.latencyMillis = latencyMillis;

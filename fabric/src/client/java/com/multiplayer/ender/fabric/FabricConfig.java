@@ -9,17 +9,30 @@ import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * Fabric 配置文件管理类。
+ * 手动实现简单的配置文件读写，用于存储核心路径、自动更新等设置。
+ */
 public class FabricConfig {
     private static boolean loaded = false;
     private static String externalEnderPath = "";
     private static boolean autoUpdate = true;
     private static boolean autoStartBackend = false;
 
+    /**
+     * 获取配置文件路径。
+     *
+     * @return 配置文件 Path 对象
+     */
     private static Path getConfigPath() {
         Path configDir = MinecraftClient.getInstance().runDirectory.toPath().resolve("config");
         return configDir.resolve("ender-fabric.conf");
     }
 
+    /**
+     * 确保配置已加载。
+     * 如果未加载，则从磁盘读取配置。
+     */
     private static void ensureLoaded() {
         if (loaded) {
             return;
@@ -51,10 +64,20 @@ public class FabricConfig {
         }
     }
 
+    /**
+     * 解析布尔值。
+     * 支持 "true" 和 "1"。
+     *
+     * @param value 字符串值
+     * @return 布尔值
+     */
     private static boolean parseBoolean(String value) {
         return "true".equalsIgnoreCase(value) || "1".equals(value);
     }
 
+    /**
+     * 保存配置到磁盘。
+     */
     private static void save() {
         try {
             Path path = getConfigPath();

@@ -13,12 +13,22 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+/**
+ * 多人游戏屏幕 Mixin（Fabric）。
+ * 在 MultiplayerScreen 添加“末影联机”按钮入口。
+ */
 @Mixin(MultiplayerScreen.class)
 public abstract class MultiplayerMenuMixin extends Screen {
     protected MultiplayerMenuMixin(Text title) {
         super(title);
     }
 
+    /**
+     * 屏幕初始化后注入。
+     * 添加“末影联机”按钮。
+     *
+     * @param ci 回调信息
+     */
     @Inject(method = "init", at = @At("TAIL"))
     private void onInit(CallbackInfo ci) {
         MinecraftClient mc = MinecraftClient.getInstance();

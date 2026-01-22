@@ -33,6 +33,14 @@ import java.util.concurrent.TimeUnit;
 
 import com.multiplayer.ender.logic.LanDiscovery;
 
+/**
+ * Ender API 客户端类。
+ * 负责处理房间管理、EasyTier 网络连接、Scaffolding 协议通信以及玩家配置文件的管理。
+ *
+ * @author Ender Developer
+ * @version 1.0
+ * @since 1.0
+ */
 public class EnderApiClient {
     private static final Gson GSON = new Gson();
     private static final String SCAFFOLDING_PREFIX = "scaffolding-mc-server-";
@@ -54,6 +62,9 @@ public class EnderApiClient {
     private static final Logger LOGGER = LoggerFactory.getLogger(EnderApiClient.class);
     private static int dynamicPort = -1;
     
+    /**
+     * 客户端状态枚举。
+     */
     public enum State {
         IDLE,
         HOSTING_STARTING,
@@ -70,10 +81,20 @@ public class EnderApiClient {
     private static final java.io.File CONFIG_FILE = new java.io.File("config/ender_room_config.json");
     private static JsonObject roomManagementState = createDefaultRoomManagementState();
 
+    /**
+     * 获取当前客户端状态。
+     *
+     * @return 当前状态枚举值
+     */
     public static State getCurrentState() {
         return currentState;
     }
 
+    /**
+     * 加载房间配置。
+     *
+     * @param state 要加载到的 JsonObject 对象
+     */
     private static void loadRoomConfig(JsonObject state) {
         if (!CONFIG_FILE.exists()) {
             return;
@@ -89,6 +110,9 @@ public class EnderApiClient {
         }
     }
 
+    /**
+     * 保存房间配置到文件。
+     */
     private static void saveRoomConfig() {
         try {
             java.io.File parent = CONFIG_FILE.getParentFile();
@@ -98,7 +122,7 @@ public class EnderApiClient {
             
             JsonObject toSave = new JsonObject();
             synchronized (ROOM_STATE_LOCK) {
-                // Only save non-MC-native settings
+                
                 for (Map.Entry<String, JsonElement> entry : roomManagementState.entrySet()) {
                     String key = entry.getKey();
                     if (isMcNativeSetting(key)) {
@@ -106,7 +130,7 @@ public class EnderApiClient {
                     }
                     toSave.add(key, entry.getValue());
                 }
-                // Explicitly save lists
+                
                 if (roomManagementState.has("whitelist")) {
                     toSave.add("whitelist", roomManagementState.get("whitelist"));
                 }
@@ -127,6 +151,12 @@ public class EnderApiClient {
         }
     }
 
+    /**
+     * 检查是否为 Minecraft 原生设置。
+     *
+     * @param key 设置键名
+     * @return 如果是原生设置则返回 true，否则返回 false
+     */
     private static boolean isMcNativeSetting(String key) {
         return (key.startsWith("allow_") && !key.equals("allow_cheats") && !key.equals("allow_pvp")) || 
                key.startsWith("spawn_protection") || 
@@ -140,27 +170,55 @@ public class EnderApiClient {
                key.equals("last_updated"); 
     }
 
+    /**
+     * 设置动态端口。
+     *
+     * @param port 端口号
+     */
     public static void setPort(int port) {
         dynamicPort = port;
     }
 
+    /**
+     * 清除动态端口并停止广播。
+     */
     public static void clearDynamicPort() {
         dynamicPort = -1;
         LanDiscovery.stopBroadcaster();
     }
 
+    /**
+     * 检查是否设置了动态端口。
+     *
+     * @return 如果设置了动态端口则返回 true，否则返回 false
+     */
     public static boolean hasDynamicPort() {
         return dynamicPort > 0;
     }
 
+    /**
+     * 获取当前使用的端口。
+     *
+     * @return 如果设置了动态端口则返回该端口，否则返回默认端口 25566
+     */
     public static int getPort() {
         return dynamicPort > 0 ? dynamicPort : 25566;
     }
 
+    /**
+     * 获取远程 Minecraft 服务器端口。
+     *
+     * @return 远程服务器端口号
+     */
     public static int getRemoteMcPort() {
         return remoteMcPort;
     }
 
+    /**
+     * 获取主机 IP 地址。
+     *
+     * @return 主机 IP 地址字符串，如果未找到则返回 null
+     */
     public static String getHostIp() {
         InetSocketAddress remote = scaffoldingRemote;
         if (remote != null && remote.getAddress() != null) {
@@ -169,16 +227,32 @@ public class EnderApiClient {
         return null;
     }
 
+    /**
+     * 获取元数据。
+     *
+     * @return 包含版本信息的 CompletableFuture
+     */
     public static CompletableFuture<String> getMeta() {
         return CompletableFuture.completedFuture("{\"version\": \"ender_core_compat\"}");
     }
 
+    /**
+     * 同步获取房间管理状态。
+     *
+     * @return 房间管理状态的 JsonObject 副本
+     */
     public static JsonObject getRoomManagementStateSync() {
         synchronized (ROOM_STATE_LOCK) {
             return roomManagementState.deepCopy();
         }
     }
 
+    /**
+     * 设置本地房间设置。
+     *
+     * @param allowCheats 是否允许作弊
+     * @param visitorPermission 访客权限设置
+     */
     public static void setLocalSettings(boolean allowCheats, String visitorPermission) {
         synchronized (ROOM_STATE_LOCK) {
             roomManagementState.addProperty("allow_cheats", allowCheats);
@@ -188,12 +262,23 @@ public class EnderApiClient {
         saveRoomConfig();
     }
 
+    /**
+     * 异步获取房间管理状态。
+     *
+     * @return 包含房间管理状态 JSON 字符串的 CompletableFuture
+     */
     public static CompletableFuture<String> getRoomManagementState() {
         synchronized (ROOM_STATE_LOCK) {
             return CompletableFuture.completedFuture(roomManagementState.toString());
         }
     }
 
+    /**
+     * 更新房间管理状态。
+     *
+     * @param stateJson 新的状态 JSON 字符串
+     * @return CompletableFuture，完成时无返回值
+     */
     public static CompletableFuture<Void> updateRoomManagementState(String stateJson) {
         if (stateJson == null) {
             return CompletableFuture.completedFuture(null);
@@ -228,6 +313,11 @@ public class EnderApiClient {
         return CompletableFuture.completedFuture(null);
     }
 
+    /**
+     * 添加房间管理日志条目。
+     *
+     * @param entry 日志内容
+     */
     public static void appendRoomManagementLog(String entry) {
         if (entry == null || entry.isEmpty()) {
             return;
@@ -240,10 +330,21 @@ public class EnderApiClient {
         }
     }
 
+    /**
+     * 检查客户端健康状态。
+     *
+     * @return 包含 true 的 CompletableFuture
+     */
     public static CompletableFuture<Boolean> checkHealth() {
         return CompletableFuture.completedFuture(true);
     }
 
+    /**
+     * 紧急停止所有服务。
+     *
+     * @param peaceful 是否平滑停止（当前未使用）
+     * @return CompletableFuture，完成时无返回值
+     */
     public static CompletableFuture<Void> panic(boolean peaceful) {
         EasyTierManager.getInstance().stop();
         stopScaffoldingClient();
@@ -255,14 +356,31 @@ public class EnderApiClient {
         return CompletableFuture.completedFuture(null);
     }
 
+    /**
+     * 获取日志内容。
+     *
+     * @param fetch 是否获取最新日志（当前实现总是返回空）
+     * @return 包含日志内容的 CompletableFuture
+     */
     public static CompletableFuture<String> getLog(boolean fetch) {
         return CompletableFuture.completedFuture("");
     }
 
+    /**
+     * 设置正在扫描的玩家（当前实现为空）。
+     *
+     * @param player 玩家名称
+     * @return CompletableFuture，完成时无返回值
+     */
     public static CompletableFuture<Void> setScanning(String player) {
         return CompletableFuture.completedFuture(null);
     }
 
+    /**
+     * 将客户端状态设置为 IDLE 并停止相关服务。
+     *
+     * @return CompletableFuture，完成时无返回值
+     */
     public static CompletableFuture<Void> setIdle() {
         EasyTierManager.getInstance().stop();
         stopScaffoldingClient();
@@ -273,6 +391,13 @@ public class EnderApiClient {
         return CompletableFuture.completedFuture(null);
     }
 
+    /**
+     * 加入指定房间。
+     *
+     * @param room 房间代码
+     * @param player 玩家名称
+     * @return 包含加入结果（成功/失败）的 CompletableFuture
+     */
     public static CompletableFuture<Boolean> joinRoom(String room, String player) {
         LOGGER.info("Joining room (EasyTier Network): {}", room);
         currentState = State.JOINING_STARTING;
@@ -280,7 +405,7 @@ public class EnderApiClient {
             try {
                 EasyTierManager manager = EasyTierManager.getInstance();
                 
-                // Ensure initialized
+                
                 if (!manager.isInitialized()) {
                     manager.initialize().join();
                 }
@@ -290,7 +415,7 @@ public class EnderApiClient {
                 String name = "";
                 String secret = "";
                 
-                // Parse room code format: U/PART1-PART2-PART3-PART4
+                
                 if (room.matches("^U/[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$")) {
                     String raw = room.substring(2);
                     String[] parts = raw.split("-");
@@ -314,10 +439,10 @@ public class EnderApiClient {
                 }
                 manager.start(cfg);
                 
-                // Wait for service to start
+                
                 Thread.sleep(1000);
 
-                // Wait for host discovery
+                
                 boolean hostFound = false;
                 boolean hostSeenButNoIp = false;
                 for (int i = 0; i < 30; i++) {
@@ -344,7 +469,7 @@ public class EnderApiClient {
                     return false;
                 }
 
-                // Start LAN broadcast
+                
                 if (hasDynamicPort()) {
                      LanDiscovery.startBroadcaster(getPort(), "Ender Online Room");
                 }
@@ -363,18 +488,38 @@ public class EnderApiClient {
         });
     }
 
+    /**
+     * 记住最后加入的房间代码。
+     *
+     * @param roomCode 房间代码
+     */
     public static void rememberRoomCode(String roomCode) {
         lastRoomCode = roomCode;
     }
 
+    /**
+     * 获取最后加入的房间代码。
+     *
+     * @return 房间代码
+     */
     public static String getLastRoomCode() {
         return lastRoomCode;
     }
 
+    /**
+     * 获取最后一次发生的错误信息。
+     *
+     * @return 错误信息字符串
+     */
     public static String getLastError() {
         return lastError;
     }
 
+    /**
+     * 获取当前状态详情。
+     *
+     * @return 包含状态信息的 JSON 字符串的 CompletableFuture
+     */
     public static CompletableFuture<String> getState() {
         JsonObject json = new JsonObject();
         
@@ -408,6 +553,11 @@ public class EnderApiClient {
         return CompletableFuture.completedFuture(json.toString());
     }
 
+    /**
+     * 创建默认的房间管理状态。
+     *
+     * @return 包含默认配置的 JsonObject
+     */
     private static JsonObject createDefaultRoomManagementState() {
         JsonObject json = new JsonObject();
         json.addProperty("room_name", "未命名房间");
@@ -446,12 +596,18 @@ public class EnderApiClient {
         json.add("backend_versions", versions);
         json.addProperty("last_updated", System.currentTimeMillis());
         
-        // Load persisted config to override defaults for custom settings
+        
         loadRoomConfig(json);
         
         return json;
     }
 
+    /**
+     * 合并两个 JsonObject，将 source 的内容合并到 target 中。
+     *
+     * @param target 目标 JsonObject
+     * @param source 源 JsonObject
+     */
     private static void mergeJsonObject(JsonObject target, JsonObject source) {
         for (Map.Entry<String, JsonElement> entry : source.entrySet()) {
             String key = entry.getKey();
@@ -463,6 +619,12 @@ public class EnderApiClient {
         }
     }
 
+    /**
+     * 向 JsonObject 添加日志条目。
+     *
+     * @param target 目标 JsonObject
+     * @param entry 日志内容
+     */
     private static void appendLogEntry(JsonObject target, String entry) {
         JsonArray logs = target.has("operation_logs") && target.get("operation_logs").isJsonArray()
                 ? target.getAsJsonArray("operation_logs")
@@ -477,6 +639,13 @@ public class EnderApiClient {
         target.add("operation_logs", trimmed);
     }
 
+    /**
+     * 开始主持游戏（创建房间）。
+     *
+     * @param port Minecraft 服务器端口
+     * @param playerName 玩家名称
+     * @return 包含房间代码的 CompletableFuture
+     */
     public static CompletableFuture<String> startHosting(int port, String playerName) {
         LOGGER.info("Starting hosting for {} on port {}", playerName, port);
         currentState = State.HOSTING_STARTING;
@@ -484,14 +653,14 @@ public class EnderApiClient {
             try {
                 EasyTierManager manager = EasyTierManager.getInstance();
                 
-                // Ensure initialized before stopping or starting
+                
                 if (!manager.isInitialized()) {
                     manager.initialize().join();
                 }
                 
                 manager.stop();
                 
-                // Generate Room Code
+                
                 String p1 = generateRandomString(4);
                 String p2 = generateRandomString(4);
                 String p3 = generateRandomString(4);
@@ -505,7 +674,7 @@ public class EnderApiClient {
                 localPlayerName = playerName == null ? "" : playerName;
                 int serverPort = startScaffoldingServer(port, localPlayerName);
                 
-                // Start Host
+                
                 com.endercore.core.easytier.EasyTierConfig cfg = manager.getConfig();
                 cfg.networkName = networkName;
                 cfg.networkSecret = networkSecret;
@@ -522,10 +691,10 @@ public class EnderApiClient {
                 
                 manager.start(cfg);
                 
-                // Wait for service to start
+                
                 Thread.sleep(1000);
 
-                // Start LAN broadcast
+                
                 if (hasDynamicPort()) {
                      String remark = roomManagementState.has("room_remark") ? roomManagementState.get("room_remark").getAsString() : "";
                      if (remark == null || remark.isEmpty()) {
@@ -536,7 +705,7 @@ public class EnderApiClient {
                 
                 currentState = State.HOSTING;
                 currentRoom = roomCode;
-                // Return room code
+                
                 return roomCode;
             } catch (Exception e) {
                 LOGGER.error("Failed to start hosting", e);
@@ -548,6 +717,12 @@ public class EnderApiClient {
         });
     }
 
+    /**
+     * 生成指定长度的随机字符串。
+     *
+     * @param length 字符串长度
+     * @return 随机字符串
+     */
     private static String generateRandomString(int length) {
         String chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
         StringBuilder sb = new StringBuilder();
@@ -558,6 +733,13 @@ public class EnderApiClient {
         return sb.toString();
     }
 
+    /**
+     * 启动 Scaffolding 服务器。
+     *
+     * @param mcPort Minecraft 服务器端口
+     * @param hostName 主机名称
+     * @return Scaffolding 服务器绑定的端口
+     */
     private static int startScaffoldingServer(int mcPort, String hostName) {
         stopScaffoldingServer();
         resetProfiles();
@@ -585,6 +767,9 @@ public class EnderApiClient {
         return scaffoldingPort;
     }
 
+    /**
+     * 停止 Scaffolding 服务器。
+     */
     private static void stopScaffoldingServer() {
         if (profileScheduler != null) {
             profileScheduler.shutdownNow();
@@ -600,6 +785,9 @@ public class EnderApiClient {
         }
     }
 
+    /**
+     * 启动 Scaffolding 客户端。
+     */
     private static void startScaffoldingClient() {
         stopScaffoldingClient();
         scaffoldingClientScheduler = Executors.newSingleThreadScheduledExecutor(r -> {
@@ -610,6 +798,9 @@ public class EnderApiClient {
         scaffoldingClientScheduler.scheduleWithFixedDelay(EnderApiClient::pollScaffoldingServer, 0, 5, TimeUnit.SECONDS);
     }
 
+    /**
+     * 停止 Scaffolding 客户端。
+     */
     private static void stopScaffoldingClient() {
         if (scaffoldingClientScheduler != null) {
             scaffoldingClientScheduler.shutdownNow();
@@ -626,15 +817,18 @@ public class EnderApiClient {
         }
     }
 
+    /**
+     * 轮询 Scaffolding 服务器以保持连接和同步数据。
+     */
     private static void pollScaffoldingServer() {
         if (currentState != State.JOINING) {
             return;
         }
         
-        // Update from EasyTier first to ensure we have a list even if WebSocket fails
+        
         updateProfilesFromEasyTier();
 
-        // LOGGER.debug("Polling scaffolding server...");
+        
         InetSocketAddress remote = findScaffoldingRemote();
         if (remote == null) {
             LOGGER.debug("Scaffolding remote not found during poll");
@@ -654,7 +848,7 @@ public class EnderApiClient {
             ping.addProperty("machine_id", LOCAL_MACHINE_ID);
             ping.addProperty("name", localPlayerName);
             ping.addProperty("vendor", VENDOR);
-            // LOGGER.debug("Sending ping: {}", ping);
+            
             client.sendSync("c:player_ping", ping.toString().getBytes(StandardCharsets.UTF_8), Duration.ofSeconds(10));
             CoreResponse resp = client.sendSync("c:player_profiles_list", new byte[0], Duration.ofSeconds(10));
             if (!resp.isOk()) {
@@ -662,13 +856,13 @@ public class EnderApiClient {
                 return;
             }
             String json = new String(resp.payload(), StandardCharsets.UTF_8);
-            // LOGGER.debug("Got profiles: {}", json);
+            
             JsonArray array = GSON.fromJson(json, JsonArray.class);
             if (array != null) {
                 updateProfilesFromArray(array);
             }
 
-            // Sync room state
+            
             CoreResponse stateResp = client.sendSync("c:room_state_sync", new byte[0], Duration.ofSeconds(10));
             if (stateResp.isOk()) {
                 String stateJson = new String(stateResp.payload(), StandardCharsets.UTF_8);
@@ -677,7 +871,7 @@ public class EnderApiClient {
                 LOGGER.warn("Failed to sync room state: status={}", stateResp.status());
             }
 
-            // Fetch server port
+            
             CoreResponse portResp = client.sendSync("c:server_port", new byte[0], Duration.ofSeconds(10));
             if (portResp.isOk()) {
                 try {
@@ -690,6 +884,9 @@ public class EnderApiClient {
         }
     }
 
+    /**
+     * 从 EasyTier 获取并更新玩家资料。
+     */
     private static void updateProfilesFromEasyTier() {
         try {
             Map<String, String> hostnames = EasyTierManager.getInstance().getPeerHostnames();
@@ -698,10 +895,10 @@ public class EnderApiClient {
                 String hostname = entry.getValue();
                 if (hostname == null || hostname.isBlank()) continue;
                 
-                // Filter out public infrastructure nodes (relay servers)
-                // They often have specific naming patterns or IDs, but based on user feedback
-                // we should be stricter.
-                // Typical EasyTier public nodes might be named "PublicServer_..." or similar.
+                
+                
+                
+                
                 if (hostname.startsWith("PublicServer_") || hostname.contains(".easytier.")) {
                     continue;
                 }
@@ -727,7 +924,7 @@ public class EnderApiClient {
                 }
                 
                 if (!found) {
-                    // Try to get real name if possible, otherwise use hostname but clean it up
+                    
                     String displayName = name;
                     
                     profiles.add(new Profile(id, displayName, "EasyTier", kind));
@@ -739,6 +936,11 @@ public class EnderApiClient {
         }
     }
 
+    /**
+     * 连接到 Scaffolding 服务器。
+     *
+     * @param remote 远程服务器地址
+     */
     private static void connectScaffolding(InetSocketAddress remote) {
         try {
             if (scaffoldingClient != null) {
@@ -767,12 +969,20 @@ public class EnderApiClient {
         }
     }
 
+    /**
+     * 扫描结果类。
+     */
     private static class ScanResult {
         InetSocketAddress address;
         boolean hostSeen;
         boolean ipMissing;
     }
 
+    /**
+     * 扫描 Scaffolding 远程主机。
+     *
+     * @return 扫描结果
+     */
     private static ScanResult scanForScaffoldingRemote() {
         ScanResult result = new ScanResult();
         Map<String, String> hostnames = EasyTierManager.getInstance().getPeerHostnames();
@@ -789,7 +999,7 @@ public class EnderApiClient {
             }
             
             result.hostSeen = true;
-            // Log found host
+            
             LOGGER.info("Found scaffolding host: {} -> {}", entry.getKey(), trimmed);
             
             String portStr = trimmed.substring(SCAFFOLDING_PREFIX.length());
@@ -801,9 +1011,9 @@ public class EnderApiClient {
             }
             String ip = ips.get(entry.getKey());
             if (ip == null || ip.isBlank()) {
-                // Try to get IP from peer info directly if not in ips map
-                // But EasyTierManager should handle this.
-                // For now, let's just log warning
+                
+                
+                
                 result.ipMissing = true;
                 LOGGER.warn("Host found but no IP for peer: {}", entry.getKey());
                 continue;
@@ -814,14 +1024,31 @@ public class EnderApiClient {
         return result;
     }
 
+    /**
+     * 查找 Scaffolding 远程主机地址。
+     *
+     * @return 远程主机地址，如果未找到则返回 null
+     */
     private static InetSocketAddress findScaffoldingRemote() {
         return scanForScaffoldingRemote().address;
     }
 
+    /**
+     * 处理 Ping 请求。
+     *
+     * @param req 核心请求对象
+     * @return 核心响应对象
+     */
     private static CoreResponse handlePing(CoreRequest req) {
         return new CoreResponse(0, req.requestId(), req.kind(), req.payload());
     }
 
+    /**
+     * 处理协议列表请求。
+     *
+     * @param req 核心请求对象
+     * @return 包含支持的协议列表的响应对象
+     */
     private static CoreResponse handleProtocols(CoreRequest req) {
         byte[] payload = String.join("\0",
                 "c:ping",
@@ -833,6 +1060,12 @@ public class EnderApiClient {
         return new CoreResponse(0, req.requestId(), req.kind(), payload);
     }
 
+    /**
+     * 处理房间状态同步请求。
+     *
+     * @param req 核心请求对象
+     * @return 包含房间状态 JSON 的响应对象
+     */
     private static CoreResponse handleRoomStateSync(CoreRequest req) {
         String json;
         synchronized (ROOM_STATE_LOCK) {
@@ -841,6 +1074,12 @@ public class EnderApiClient {
         return new CoreResponse(0, req.requestId(), req.kind(), json.getBytes(StandardCharsets.UTF_8));
     }
 
+    /**
+     * 处理服务器端口请求。
+     *
+     * @param req 核心请求对象
+     * @return 包含服务器端口号的响应对象
+     */
     private static CoreResponse handleServerPort(CoreRequest req) {
         try {
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -852,6 +1091,12 @@ public class EnderApiClient {
         }
     }
 
+    /**
+     * 处理玩家 Ping 请求，用于更新玩家在线状态。
+     *
+     * @param req 核心请求对象
+     * @return 响应对象
+     */
     private static CoreResponse handlePlayerPing(CoreRequest req) {
         try {
             String body = new String(req.payload(), StandardCharsets.UTF_8);
@@ -876,12 +1121,23 @@ public class EnderApiClient {
         }
     }
 
+    /**
+     * 处理获取玩家资料列表请求。
+     *
+     * @param req 核心请求对象
+     * @return 包含玩家资料列表 JSON 的响应对象
+     */
     private static CoreResponse handlePlayerProfilesList(CoreRequest req) {
         JsonArray array = buildProfilesJson();
         byte[] payload = array.toString().getBytes(StandardCharsets.UTF_8);
         return new CoreResponse(0, req.requestId(), req.kind(), payload);
     }
 
+    /**
+     * 更新主机玩家资料。
+     *
+     * @param name 主机玩家名称
+     */
     private static void updateHostProfile(String name) {
         for (Profile profile : profiles) {
             if (profile.machineId.equals(LOCAL_MACHINE_ID) && "HOST".equals(profile.kind)) {
@@ -895,6 +1151,13 @@ public class EnderApiClient {
         profileLastSeen.put(LOCAL_MACHINE_ID, System.currentTimeMillis());
     }
 
+    /**
+     * 更新或插入访客玩家资料。
+     *
+     * @param machineId 机器ID
+     * @param name 玩家名称
+     * @param vendor 客户端供应商
+     */
     private static void upsertGuestProfile(String machineId, String name, String vendor) {
         for (Profile profile : profiles) {
             if (profile.machineId.equals(machineId)) {
@@ -909,6 +1172,9 @@ public class EnderApiClient {
         profileLastSeen.put(machineId, System.currentTimeMillis());
     }
 
+    /**
+     * 清理过期的访客资料。
+     */
     private static void pruneGuestProfiles() {
         long now = System.currentTimeMillis();
         for (Profile profile : new ArrayList<>(profiles)) {
@@ -923,6 +1189,11 @@ public class EnderApiClient {
         }
     }
 
+    /**
+     * 从 JSON 数组更新资料列表。
+     *
+     * @param array JSON 数组
+     */
     private static void updateProfilesFromArray(JsonArray array) {
         profiles.clear();
         profileLastSeen.clear();
@@ -943,6 +1214,11 @@ public class EnderApiClient {
         }
     }
 
+    /**
+     * 构建包含所有玩家资料的 JSON 数组。
+     *
+     * @return JSON 数组
+     */
     private static JsonArray buildProfilesJson() {
         JsonArray array = new JsonArray();
         for (Profile profile : profiles) {
@@ -959,6 +1235,12 @@ public class EnderApiClient {
         return array;
     }
 
+    /**
+     * 构建仅包含玩家名称的 JSON 数组。
+     *
+     * @param profilesArray 玩家资料 JSON 数组
+     * @return 玩家名称 JSON 数组
+     */
     private static JsonArray buildPlayersJson(JsonArray profilesArray) {
         JsonArray players = new JsonArray();
         for (JsonElement element : profilesArray) {
@@ -977,11 +1259,20 @@ public class EnderApiClient {
         return players;
     }
 
+    /**
+     * 重置所有玩家资料。
+     */
     private static void resetProfiles() {
         profiles.clear();
         profileLastSeen.clear();
     }
 
+    /**
+     * 选择一个可用的端口。
+     *
+     * @param preferred 首选端口
+     * @return 可用的端口号
+     */
     private static int pickAvailablePort(int preferred) {
         if (isPortAvailable(preferred)) {
             return preferred;
@@ -989,6 +1280,11 @@ public class EnderApiClient {
         return findAvailablePort();
     }
 
+    /**
+     * 查找一个随机可用端口。
+     *
+     * @return 端口号
+     */
     private static int findAvailablePort() {
         try (java.net.ServerSocket socket = new java.net.ServerSocket(0)) {
             return socket.getLocalPort();
@@ -997,6 +1293,12 @@ public class EnderApiClient {
         }
     }
 
+    /**
+     * 检查指定端口是否可用。
+     *
+     * @param port 端口号
+     * @return 如果端口可用则返回 true，否则返回 false
+     */
     private static boolean isPortAvailable(int port) {
         try (java.net.ServerSocket socket = new java.net.ServerSocket(port)) {
             return true;
@@ -1005,6 +1307,9 @@ public class EnderApiClient {
         }
     }
 
+    /**
+     * 玩家资料内部类。
+     */
     private static final class Profile {
         private final String machineId;
         private volatile String name;

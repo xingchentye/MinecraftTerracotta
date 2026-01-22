@@ -14,37 +14,50 @@ import java.time.Duration;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
 
+ 
 /**
- * Core 通信模块入口：提供创建客户端/服务端的便捷方法。
+ * CoreComm 核心通信入口类。
+ * 提供创建客户端和服务器的工厂方法，以及命令行入口。
+ *
+ * @author Ender Developer
+ * @version 1.0
+ * @since 1.0
  */
 public final class CoreComm {
     private CoreComm() {
     }
 
     /**
-     * 创建 WebSocket 客户端。
+     * 创建新的 WebSocket 客户端。
      *
-     * @param config           配置
-     * @param exceptionHandler 异常回调（可为 null）
-     * @param callbackExecutor 回调执行器（可为 null）
-     * @return 客户端实例
+     * @param config           客户端配置
+     * @param exceptionHandler 异常处理器（可选）
+     * @param callbackExecutor 回调执行器（可选，默认在 Netty 线程中执行）
+     * @return WebSocket 客户端实例
      */
     public static CoreWebSocketClient newClient(CoreWebSocketConfig config, CoreExceptionHandler exceptionHandler, Executor callbackExecutor) {
         return new CoreWebSocketClient(config, exceptionHandler, callbackExecutor);
     }
 
     /**
-     * 创建 WebSocket 服务端。
+     * 创建新的 WebSocket 服务器。
      *
-     * @param address        监听地址
-     * @param maxFrameBytes  最大帧大小
-     * @param handlerExecutor handler 执行线程池（可为 null）
-     * @return 服务端实例
+     * @param address         绑定地址
+     * @param maxFrameBytes   最大帧大小
+     * @param handlerExecutor 处理器执行器（可选，默认在 Netty 线程中执行）
+     * @return WebSocket 服务器实例
      */
     public static CoreWebSocketServer newServer(InetSocketAddress address, int maxFrameBytes, Executor handlerExecutor) {
         return new CoreWebSocketServer(address, maxFrameBytes, handlerExecutor);
     }
 
+    /**
+     * 命令行入口。
+     * 支持 server 和 client 模式，用于测试通信功能。
+     *
+     * @param args 命令行参数
+     * @throws Exception 启动过程中的异常
+     */
     public static void main(String[] args) throws Exception {
         if (args.length == 0) {
             System.err.println("Usage:");

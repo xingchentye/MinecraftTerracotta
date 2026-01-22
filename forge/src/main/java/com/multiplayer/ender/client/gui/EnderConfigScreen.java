@@ -9,11 +9,24 @@ import net.minecraft.client.gui.layouts.LinearLayout;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
+/**
+ * 末影联机设置屏幕。
+ * 提供对模组配置项的修改功能，如核心路径、自动更新和自动启动。
+ */
 public class EnderConfigScreen extends EnderBaseScreen {
+    /** 临时存储的核心路径配置值 */
     private String tempPath;
+    /** 临时存储的自动更新配置值 */
     private boolean tempAutoUpdate;
+    /** 临时存储的自动启动后端配置值 */
     private boolean tempAutoStart;
 
+    /**
+     * 构造函数。
+     * 初始化配置项的临时值为当前配置值。
+     *
+     * @param parent 父屏幕
+     */
     public EnderConfigScreen(Screen parent) {
         super(Component.literal("末影联机设置"), parent);
         this.tempPath = ConfigForge.EXTERNAL_ender_PATH.get();
@@ -21,6 +34,10 @@ public class EnderConfigScreen extends EnderBaseScreen {
         this.tempAutoStart = ConfigForge.AUTO_START_BACKEND.get();
     }
 
+    /**
+     * 初始化屏幕内容。
+     * 创建并布局配置项的控件（文本框、按钮）。
+     */
     @Override
     protected void initContent() {
         GridLayout grid = new GridLayout();
@@ -60,6 +77,10 @@ public class EnderConfigScreen extends EnderBaseScreen {
         this.layout.addToFooter(footerButtons);
     }
 
+    /**
+     * 保存配置。
+     * 将临时变量的值应用到 ConfigForge 并持久化保存。
+     */
     private void saveConfig() {
         ConfigForge.EXTERNAL_ender_PATH.set(this.tempPath);
         ConfigForge.AUTO_UPDATE.set(this.tempAutoUpdate);

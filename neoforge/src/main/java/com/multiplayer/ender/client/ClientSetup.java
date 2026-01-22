@@ -27,17 +27,34 @@ import net.neoforged.neoforge.client.event.ScreenEvent;
 import net.neoforged.neoforge.client.event.RenderGuiEvent;
 
 @EventBusSubscriber(modid = "ender_online", value = Dist.CLIENT)
+/**
+ * 客户端启动与状态管理类。
+ * <p>
+ * 该类主要负责以下功能：
+ * 1. 客户端启动时的初始化（如自动启动后端进程）。
+ * 2. 监听客户端 Tick 事件，定期轮询后端状态。
+ * 3. 渲染游戏内 HUD 通知（Toast），如成员加入/离开、房间号提示等。
+ * 4. 处理客户端登出事件，自动停止托管。
+ * </p>
+ */
 public class ClientSetup {
     private static final Logger LOGGER = LoggerFactory.getLogger(ClientSetup.class);
     private static boolean hasAutoStarted = false;
     private static int tickCounter = 0;
+    /** 记录上一次检查时是否处于 Hosting 状态，用于状态跳变检测 */
     private static boolean wasHostOk = false;
     private static String lastRoomCode = "";
     private static final Gson GSON = new Gson();
     private static String lastStateValue = "";
+    /** 记录上一次检查时的房间成员名单，用于计算成员变动 */
     private static java.util.Set<String> lastMemberNames = new java.util.HashSet<>();
+    /** 当前活跃的 HUD 通知列表 */
     private static final java.util.List<HudToast> activeToasts = new java.util.ArrayList<>();
 
+    /**
+     * 内部类：HUD 通知对象。
+     * 存储通知的标题、内容、尺寸和创建时间。
+     */
     private static class HudToast {
         private final Component title;
         private final Component message;
@@ -54,6 +71,12 @@ public class ClientSetup {
         }
     }
 
+    /**
+     * 显示一条 HUD 通知。
+     *
+     * @param title   通知标题
+     * @param message 通知内容
+     */
     public static void showToast(Component title, Component message) {
         Minecraft mc = Minecraft.getInstance();
         if (mc == null || mc.font == null) {
@@ -65,6 +88,14 @@ public class ClientSetup {
         activeToasts.add(new HudToast(title, message, width, height, now));
     }
 
+    /**
+     * 计算通知框的宽度。
+     * 根据文本长度动态计算，限制在屏幕宽度范围内。
+     *
+     * @param title   标题
+     * @param message 内容
+     * @return 计算出的宽度
+     */
     private static int calculateToastWidth(Component title, Component message) {
         Minecraft mc = Minecraft.getInstance();
         if (mc == null || mc.font == null) {
@@ -81,6 +112,12 @@ public class ClientSetup {
         return Math.min(rawWidth, maxWidth);
     }
 
+    /**
+     * 处理房间号通知逻辑。
+     * 当获取到新的房间号时调用，触发 Toast 和聊天栏提示。
+     *
+     * @param roomCode 房间号
+     */
     public static void handleRoomCodeNotification(String roomCode) {
         if (roomCode == null || roomCode.isEmpty()) {
             return;
@@ -93,6 +130,11 @@ public class ClientSetup {
         showRoomCodeToasts(roomCode);
     }
 
+    /**
+     * 在聊天栏显示可点击复制的房间号。
+     *
+     * @param roomCode 房间号
+     */
     private static void showRoomCodeInChat(String roomCode) {
         Minecraft mc = Minecraft.getInstance();
         MutableComponent msg = Component.literal("[Ender Core] 房间已创建！房间号: ");
@@ -110,6 +152,12 @@ public class ClientSetup {
         mc.gui.getChat().addMessage(msg);
     }
 
+    /**
+     * 客户端 Tick 事件回调。
+     * 每 20 tick (约1秒) 检查一次后端状态。
+     *
+     * @param event Tick 事件
+     */
     @SubscribeEvent
     public static void onClientTick(ClientTickEvent.Post event) {
         if (Minecraft.getInstance().player == null) return;
@@ -121,6 +169,13 @@ public class ClientSetup {
         }
     }
 
+    /**
+     * 检查后端状态并更新 UI。
+     * 1. 获取后端状态 JSON。
+     * 2. 检测状态变化（host-ok, guest-ok）。
+     * 3. 如果在 hosting 状态，获取并显示房间号。
+     * 4. 监控成员列表变化，显示加入/离开通知。
+     */
     private static void checkBackendState() {
         if (!EnderApiClient.hasDynamicPort()) {
             if (wasHostOk) {
@@ -236,6 +291,13 @@ public class ClientSetup {
         });
     }
 
+    /**
+     * 渲染 HUD 通知。
+     * 在 RenderGuiEvent.Post 事件中调用，绘制所有活跃的 Toast。
+     * 包含简单的滑入滑出动画。
+     *
+     * @param event GUI 渲染事件
+     */
     @SubscribeEvent
     public static void onRenderGui(RenderGuiEvent.Post event) {
         if (activeToasts.isEmpty()) {
@@ -279,6 +341,12 @@ public class ClientSetup {
         }
     }
 
+    /**
+     * 客户端登出事件回调。
+     * 当玩家退出世界时，如果是房主，则自动停止托管并通知后端置为空闲状态。
+     *
+     * @param event 登出事件
+     */
     @SubscribeEvent
     public static void onClientLogout(net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent.LoggingOut event) {
         if (wasHostOk) {
@@ -289,6 +357,12 @@ public class ClientSetup {
         }
     }
 
+    /**
+     * 屏幕初始化事件回调。
+     * 在游戏启动进入标题画面时，检查是否需要自动启动后端进程。
+     *
+     * @param event 屏幕初始化事件
+     */
     @SubscribeEvent
     public static void onScreenInit(ScreenEvent.Init.Post event) {
         if (event.getScreen() instanceof TitleScreen && !hasAutoStarted) {

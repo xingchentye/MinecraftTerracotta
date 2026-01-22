@@ -14,6 +14,10 @@ import net.minecraft.client.gui.widget.TextWidget;
 import net.minecraft.text.Text;
 import org.jetbrains.annotations.NotNull;
 
+/**
+ * 房间信息屏幕（Fabric）。
+ * 显示当前房间的状态、房间号、在线人数等信息。
+ */
 public class RoomInfoScreen extends EnderBaseScreen {
     private static final Gson GSON = new Gson();
     private long lastStateCheck = 0;
@@ -26,6 +30,10 @@ public class RoomInfoScreen extends EnderBaseScreen {
         super(Text.literal("房间信息"), parent);
     }
 
+    /**
+     * 初始化内容。
+     * 显示状态、房间号、成员数，并提供详细列表和断开连接按钮。
+     */
     @Override
     protected void initContent() {
         DirectionalLayoutWidget contentLayout = DirectionalLayoutWidget.vertical().spacing(8);
@@ -66,6 +74,10 @@ public class RoomInfoScreen extends EnderBaseScreen {
         checkStateImmediately();
     }
 
+    /**
+     * 每刻更新。
+     * 轮询后台状态以刷新界面显示。
+     */
     @Override
     public void tick() {
         super.tick();
@@ -88,6 +100,10 @@ public class RoomInfoScreen extends EnderBaseScreen {
         super.render(context, mouseX, mouseY, partialTick);
     }
 
+    /**
+     * 立即检查状态。
+     * 如果存在动态端口，则立即发起一次状态请求。
+     */
     private void checkStateImmediately() {
         if (!EnderApiClient.hasDynamicPort()) {
             return;

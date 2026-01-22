@@ -11,18 +11,40 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * 局域网发现服务类，用于广播局域网内的服务器信息。
+ *
+ * @author Ender Developer
+ * @version 1.0
+ * @since 1.0
+ */
 public class LanDiscovery {
+    /**
+     * 日志记录器
+     */
     private static final Logger LOGGER = LoggerFactory.getLogger(LanDiscovery.class);
-    private static final String GROUP_ADDRESS = "224.0.2.60";
-    private static final int PORT = 4445;
-    private static ScheduledExecutorService broadcasterExecutor;
 
     /**
-     * Starts broadcasting the presence of a LAN server.
-     * This makes the server visible in the Minecraft multiplayer menu (LAN World).
+     * 组播地址
+     */
+    private static final String GROUP_ADDRESS = "224.0.2.60";
+
+    /**
+     * 组播端口号
+     */
+    private static final int PORT = 4445;
+
+    /**
+     * 广播任务调度执行器
+     */
+    private static ScheduledExecutorService broadcasterExecutor;
+
+     
+    /**
+     * 启动局域网广播服务。
      *
-     * @param port The port where the Minecraft server (or proxy) is listening
-     * @param motd The message of the day (description) to show
+     * @param port 本地服务器端口号
+     * @param motd 服务器描述信息 (Message Of The Day)
      */
     public static synchronized void startBroadcaster(int port, String motd) {
         stopBroadcaster();
@@ -35,7 +57,7 @@ public class LanDiscovery {
 
         broadcasterExecutor.scheduleAtFixedRate(() -> {
             try {
-                // Format: [MOTD]{motd}[/MOTD][AD]{port}[/AD]
+                
                 String msg = String.format("[MOTD]%s[/MOTD][AD]%d[/AD]", motd, port);
                 byte[] data = msg.getBytes(StandardCharsets.UTF_8);
                 InetAddress group = InetAddress.getByName(GROUP_ADDRESS);
@@ -52,6 +74,9 @@ public class LanDiscovery {
         LOGGER.info("Started LAN broadcaster for port {} with MOTD: {}", port, motd);
     }
 
+    /**
+     * 停止局域网广播服务。
+     */
     public static synchronized void stopBroadcaster() {
         if (broadcasterExecutor != null) {
             broadcasterExecutor.shutdownNow();

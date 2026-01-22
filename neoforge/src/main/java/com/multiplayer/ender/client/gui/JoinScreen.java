@@ -16,21 +16,48 @@ import net.minecraft.client.gui.layouts.LinearLayout;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
+/**
+ * 加入房间界面。
+ * 允许玩家输入联机码并加入现有的房间。
+ *
+ * @author Ender Developer
+ * @version 1.0
+ * @since 1.0
+ */
 public class JoinScreen extends EnderBaseScreen {
+    /** 房间号输入框 */
     private EditBox roomCodeBox;
+    /** 当前状态文本 */
     private Component statusText = Component.translatable("ender.join.status.enter_code");
+    /** 是否正在处理请求 */
     private boolean isWorking = false;
+    /** 加入按钮 */
     private Button joinBtn;
+    /** 上次状态检查时间戳 */
     private long lastStateCheck = 0;
     private static final Gson GSON = new Gson();
+    /** 自动填入的联机码 */
     private String autoJoinCode = null;
+    /** 是否保持连接（用于成功后不发送断开指令） */
     private boolean keepConnection = false;
+    /** 已连接的状态对象 */
     private JsonObject connectedState = null;
 
+    /**
+     * 构造函数。
+     *
+     * @param parent 父屏幕
+     */
     public JoinScreen(Screen parent) {
         super(Component.translatable("ender.join.title"), parent);
     }
 
+    /**
+     * 构造函数。
+     *
+     * @param parent       父屏幕
+     * @param autoJoinCode 自动填入的联机码
+     */
     public JoinScreen(Screen parent, String autoJoinCode) {
         this(parent);
         this.autoJoinCode = autoJoinCode;
@@ -64,6 +91,10 @@ public class JoinScreen extends EnderBaseScreen {
         }
     }
 
+    /**
+     * 尝试加入房间。
+     * 验证输入并发送请求。
+     */
     private void joinRoom() {
         String roomCode = roomCodeBox.getValue();
         if (roomCode.isEmpty()) {
@@ -94,6 +125,12 @@ public class JoinScreen extends EnderBaseScreen {
         });
     }
 
+    /**
+     * 发送加入请求。
+     *
+     * @param roomCode   房间号
+     * @param playerName 玩家名称
+     */
     private void doJoinRequest(String roomCode, String playerName) {
         EnderApiClient.joinRoom(roomCode, playerName).thenAccept(success -> {
             if (success) {
@@ -118,6 +155,10 @@ public class JoinScreen extends EnderBaseScreen {
         }
     }
 
+    /**
+     * 检查连接状态。
+     * 轮询后端状态以确认是否连接成功。
+     */
     private void checkConnectionStatus() {
         EnderApiClient.getState().thenAccept(stateJson -> {
             if (stateJson == null) return;
@@ -140,6 +181,9 @@ public class JoinScreen extends EnderBaseScreen {
         });
     }
 
+    /**
+     * 检查是否已存在连接。
+     */
     private void checkExistingConnection() {
         if (!EnderApiClient.hasDynamicPort()) {
             return;
@@ -156,6 +200,12 @@ public class JoinScreen extends EnderBaseScreen {
         });
     }
 
+    /**
+     * 判断状态是否为已连接。
+     *
+     * @param json 状态 JSON
+     * @return 是否已连接
+     */
     private boolean isConnectedState(JsonObject json) {
         if (json == null || !json.has("state")) {
             return false;
@@ -164,6 +214,11 @@ public class JoinScreen extends EnderBaseScreen {
         return "guest-ok".equals(state) || "host-ok".equals(state);
     }
 
+    /**
+     * 处理连接成功状态。
+     *
+     * @param json 状态 JSON
+     */
     private void handleConnectedState(JsonObject json) {
         statusText = Component.translatable("ender.join.status.connected");
         isWorking = false;
@@ -176,6 +231,11 @@ public class JoinScreen extends EnderBaseScreen {
         openConnectedScreen(json);
     }
 
+    /**
+     * 跳转到已连接界面（仪表盘）。
+     *
+     * @param json 状态 JSON
+     */
     private void openConnectedScreen(JsonObject json) {
         if (this.minecraft == null) {
             return;
@@ -211,6 +271,12 @@ public class JoinScreen extends EnderBaseScreen {
         }
     }
 
+    /**
+     * 渲染房间信息概览。
+     *
+     * @param guiGraphics 图形上下文
+     * @param startY      起始 Y 坐标
+     */
     private void renderRoomInfo(GuiGraphics guiGraphics, int startY) {
         if (connectedState == null) {
             return;
@@ -244,6 +310,12 @@ public class JoinScreen extends EnderBaseScreen {
         }
     }
 
+    /**
+     * 提取成员列表。
+     *
+     * @param json 状态 JSON
+     * @return 成员名称列表
+     */
     private java.util.List<String> extractMembers(JsonObject json) {
         java.util.List<String> members = new java.util.ArrayList<>();
         if (json.has("profiles")) {

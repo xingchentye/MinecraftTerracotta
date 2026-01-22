@@ -25,10 +25,15 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
+/**
+ * 对局域网开放屏幕 Mixin（Fabric）。
+ * 劫持 ShareToLanScreen，添加末影联机开关，并修改“开放”按钮的行为。
+ */
 @Mixin(OpenToLanScreen.class)
 public abstract class ShareToLanScreenMixin extends Screen {
     private static boolean enableEnder = false;
     private static final Gson GSON = new Gson();
+    /** 房间状态轮询线程池 */
     private static final ScheduledExecutorService ROOM_POLL_EXECUTOR = Executors.newSingleThreadScheduledExecutor(r -> {
         Thread thread = new Thread(r, "Ender-Room-Poll");
         thread.setDaemon(true);
@@ -39,6 +44,12 @@ public abstract class ShareToLanScreenMixin extends Screen {
         super(title);
     }
 
+    /**
+     * 屏幕初始化后注入。
+     * 添加末影联机开关按钮，隐藏原有的开放按钮，添加自定义的开放按钮。
+     *
+     * @param ci 回调信息
+     */
     @Inject(method = "init", at = @At("TAIL"))
     private void onInit(CallbackInfo ci) {
         int width = this.width;

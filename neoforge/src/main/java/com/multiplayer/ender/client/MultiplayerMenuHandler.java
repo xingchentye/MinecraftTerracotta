@@ -14,9 +14,22 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.ScreenEvent;
 
+/**
+ * 多人游戏菜单处理器。
+ * 在多人游戏屏幕上添加“末影联机”入口按钮。
+ *
+ * @author Ender Developer
+ * @version 1.0
+ * @since 1.0
+ */
 @EventBusSubscriber(modid = "ender_online", value = Dist.CLIENT)
 public class MultiplayerMenuHandler {
 
+    /**
+     * 当屏幕初始化时调用。
+     *
+     * @param event 屏幕初始化事件
+     */
     @SubscribeEvent
     public static void onScreenInit(ScreenEvent.Init.Post event) {
         Screen screen = event.getScreen();

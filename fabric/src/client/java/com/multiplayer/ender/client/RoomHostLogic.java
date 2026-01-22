@@ -11,12 +11,23 @@ import net.minecraft.world.GameRules;
 
 import java.util.List;
 
+/**
+ * 房间托管逻辑处理类（Fabric）。
+ * 负责在房主端同步 Minecraft 服务器状态（如游戏规则、权限）到后端。
+ */
 public class RoomHostLogic {
     private static int tickCounter = 0;
     private static boolean isSyncedWithServer = false;
 
+    /**
+     * 每 Tick 执行的逻辑。
+     * 只有当当前状态为 HOSTING 时才执行同步。
+     * 每 20 tick（约 1 秒）执行一次。
+     *
+     * @param server Minecraft 服务器实例
+     */
     public static void onServerTick(MinecraftServer server) {
-        if (tickCounter++ % 20 != 0) return; // Run once per second
+        if (tickCounter++ % 20 != 0) return; 
 
         if (EnderApiClient.getCurrentState() != EnderApiClient.State.HOSTING) {
              isSyncedWithServer = false;
@@ -34,10 +45,16 @@ public class RoomHostLogic {
         applyState(server, state);
     }
 
+    /**
+     * 将 Minecraft 服务器的配置同步到后端。
+     * 包括 PVP、作弊权限、出生点保护、游戏规则（死亡不掉落、天气锁定等）。
+     *
+     * @param server Minecraft 服务器实例
+     */
     private static void syncFromMinecraft(MinecraftServer server) {
         JsonObject update = new JsonObject();
         
-        // PVP
+        
         boolean pvp = true;
         try {
             pvp = (boolean) server.getClass().getMethod("isPvpAllowed").invoke(server);
@@ -48,7 +65,7 @@ public class RoomHostLogic {
         }
         update.addProperty("allow_pvp", pvp);
         
-        // Cheats
+        
         boolean allowCheats = false;
         try {
              Object playerManager = server.getClass().getMethod("getPlayerManager").invoke(server);
@@ -60,7 +77,7 @@ public class RoomHostLogic {
         } catch (Exception ignored) {}
         update.addProperty("allow_cheats", allowCheats);
         
-        // Spawn Protection
+        
         int spawnProtection = 0;
         try {
              java.lang.reflect.Method m = server.getClass().getMethod("getSpawnProtectionRadius");
@@ -68,7 +85,7 @@ public class RoomHostLogic {
         } catch (Exception ignored) {}
         update.addProperty("spawn_protection", spawnProtection);
 
-        // Game Rules
+        
         GameRules rules = server.getGameRules();
         update.addProperty("keep_inventory", rules.getBoolean(GameRules.KEEP_INVENTORY));
         update.addProperty("weather_lock", !rules.getBoolean(GameRules.DO_WEATHER_CYCLE));
@@ -81,18 +98,32 @@ public class RoomHostLogic {
         EnderApiClient.updateRoomManagementState(update.toString());
     }
 
+    /**
+     * 应用后端状态到 Minecraft 服务器。
+     * 包括执行访问控制（白名单/黑名单）和同步游戏规则。
+     *
+     * @param server Minecraft 服务器实例
+     * @param state 后端状态 JSON
+     */
     public static void applyState(MinecraftServer server, JsonObject state) {
         enforceAccessControl(server, state);
         enforceGameRules(server, state);
     }
 
+    /**
+     * 强制执行访问控制。
+     * 检查当前在线玩家是否符合白名单/黑名单规则，不符合则踢出。
+     *
+     * @param server Minecraft 服务器实例
+     * @param state 后端状态 JSON
+     */
     private static void enforceAccessControl(MinecraftServer server, JsonObject state) {
         String hostName = "";
         try {
-            // Try to get single player name if integrated server
+            
             if (server.isSingleplayer()) {
                 try {
-                     // Fallback for newer mappings where it might be getSinglePlayerName() or similar
+                     
                      java.lang.reflect.Method m = server.getClass().getMethod("getUserName");
                      hostName = (String) m.invoke(server);
                 } catch (Exception ignored) {
@@ -104,7 +135,7 @@ public class RoomHostLogic {
             }
         } catch (Exception ignored) {
             try {
-                // Fallback for different mappings
+                
                 java.lang.reflect.Method m = server.getClass().getMethod("getUserName");
                 hostName = (String) m.invoke(server);
             } catch (Exception ignored2) {}
@@ -114,7 +145,7 @@ public class RoomHostLogic {
         JsonArray whitelist = state.has("whitelist") ? state.getAsJsonArray("whitelist") : new JsonArray();
         String visitorPermission = state.has("visitor_permission") ? state.get("visitor_permission").getAsString() : "可交互";
 
-        // Reflection to get players to support different mappings
+        
         Object playerManager;
         try {
             playerManager = server.getClass().getMethod("getPlayerManager").invoke(server);
@@ -214,7 +245,7 @@ public class RoomHostLogic {
         }
     }
     
-    // Helpers
+    
     private static boolean containsName(JsonArray array, String name) {
         if (array == null || name == null) return false;
         for (JsonElement el : array) {

@@ -5,14 +5,23 @@ import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 
+/**
+ * 传统服务器Ping检测工具类。
+ * 用于通过发送0xFE数据包来检测服务器是否在线。
+ *
+ * @author Ender Developer
+ * @version 1.0
+ * @since 1.0
+ */
 public class LegacyPing {
+     
     /**
-     * Checks if a Minecraft server is reachable using the legacy 0xFE ping.
-     * 
-     * @param host Host to connect to
-     * @param port Port to connect to
-     * @param timeout Timeout in milliseconds
-     * @return true if the server responded with 0xFF
+     * 检测目标服务器是否可连接。
+     *
+     * @param host 目标主机地址
+     * @param port 目标端口号
+     * @param timeout 连接超时时间（毫秒）
+     * @return 如果服务器响应正常返回true，否则返回false
      */
     public static boolean check(String host, int port, int timeout) {
         try (Socket socket = new Socket()) {
@@ -20,13 +29,13 @@ public class LegacyPing {
             socket.connect(new InetSocketAddress(host, port), timeout);
             
             OutputStream out = socket.getOutputStream();
-            out.write(0xFE); // Legacy ping packet
+            out.write(0xFE); 
             out.flush();
             
             InputStream in = socket.getInputStream();
             int firstByte = in.read();
             
-            // Expecting 0xFF (255) as the first byte of the Kick/Disconnect packet
+            
             return firstByte == 0xFF;
         } catch (Exception e) {
             return false;

@@ -14,6 +14,13 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.NotNull;
 
+/**
+ * 房间详细信息展示屏幕。
+ * <p>
+ * 显示当前房间的状态（如连接中、已连接）、房间号、在线人数等信息。
+ * 也是访客查看房间信息的入口。
+ * </p>
+ */
 public class RoomInfoScreen extends EnderBaseScreen {
     private static final Gson GSON = new Gson();
     private long lastStateCheck = 0;
@@ -98,6 +105,12 @@ public class RoomInfoScreen extends EnderBaseScreen {
         });
     }
 
+    /**
+     * 更新后端状态显示。
+     * 解析状态 JSON，更新状态文本和成员列表。
+     *
+     * @param stateJson 状态 JSON 字符串
+     */
     private void updateBackendState(String stateJson) {
         if (stateJson == null || stateJson.equals(this.lastStateRaw)) {
             return;
@@ -137,6 +150,13 @@ public class RoomInfoScreen extends EnderBaseScreen {
         }
     }
 
+    /**
+     * 从状态 JSON 中提取成员列表。
+     * 兼容不同的 JSON 格式（profiles 对象数组或 players 字符串数组）。
+     *
+     * @param json 状态 JSON 对象
+     * @return 成员名称列表
+     */
     private java.util.List<String> extractMembers(JsonObject json) {
         java.util.List<String> members = new java.util.ArrayList<>();
         if (json == null) {

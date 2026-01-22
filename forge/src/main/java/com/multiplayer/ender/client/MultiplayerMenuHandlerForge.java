@@ -14,9 +14,19 @@ import net.minecraftforge.client.event.ScreenEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
+/**
+ * 多人游戏菜单处理器（Forge）。
+ * 在多人游戏屏幕添加“末影联机”按钮。
+ */
 @Mod.EventBusSubscriber(modid = "ender_online", value = Dist.CLIENT, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class MultiplayerMenuHandlerForge {
 
+    /**
+     * 屏幕初始化后事件。
+     * 在 JoinMultiplayerScreen 中添加入口按钮。
+     *
+     * @param event 屏幕初始化事件
+     */
     @SubscribeEvent
     public static void onScreenInit(ScreenEvent.Init.Post event) {
         Screen screen = event.getScreen();

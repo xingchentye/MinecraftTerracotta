@@ -33,6 +33,10 @@ import net.minecraft.client.gui.screen.narration.NarrationMessageBuilder;
 import java.util.List;
 import net.minecraft.client.gui.Element;
 
+/**
+ * 末影联机仪表盘（Fabric）。
+ * 模组的核心 GUI，整合了房间状态、玩家列表、设置管理等功能。
+ */
 public class EnderDashboard extends EnderBaseScreen {
     private static final Gson GSON = new Gson();
     private static String lastClipboard = "";
@@ -132,7 +136,7 @@ public class EnderDashboard extends EnderBaseScreen {
             if (clipboard != null) {
                 clipboard = clipboard.trim();
                 if (!clipboard.isEmpty() && !clipboard.equals(lastClipboard)) {
-                    // Match standard 4-part room code: U/XXXX-XXXX-XXXX-XXXX
+                    
                     if (clipboard.matches("^U/[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$")) {
                         lastClipboard = clipboard;
                         String finalClipboard = clipboard;
@@ -146,14 +150,14 @@ public class EnderDashboard extends EnderBaseScreen {
 
     @Override
     protected void initContent() {
-        // Fix: Sync static UI state with actual backend state on init
+        
         EnderApiClient.State realState = EnderApiClient.getCurrentState();
         if (realState == EnderApiClient.State.IDLE) {
             wasConnected = false;
             lastStateJson = null;
         } else if (realState == EnderApiClient.State.HOSTING || realState == EnderApiClient.State.JOINING) {
             wasConnected = true;
-            // If the cached JSON contradicts the real state, clear it to force a refresh
+            
             if (lastStateJson != null && lastStateJson.has("state")) {
                 String cachedState = lastStateJson.get("state").getAsString();
                 boolean cachedIsHost = "host-ok".equals(cachedState);
@@ -263,7 +267,7 @@ public class EnderDashboard extends EnderBaseScreen {
         }
         
         if (isStarting) {
-            // Show loading or starting UI
+            
             DirectionalLayoutWidget loadingLayout = DirectionalLayoutWidget.vertical().spacing(10);
             loadingLayout.getMainPositioner().alignHorizontalCenter();
             loadingLayout.add(new TextWidget(Text.translatable("ender.host.status.requesting"), this.textRenderer));
@@ -297,7 +301,7 @@ public class EnderDashboard extends EnderBaseScreen {
     }
 
     private void initGuestConnectedContent() {
-        // Footer
+        
         DirectionalLayoutWidget footerLayout = DirectionalLayoutWidget.horizontal().spacing(10);
 
         footerLayout.add(net.minecraft.client.gui.widget.ButtonWidget.builder(
@@ -318,18 +322,18 @@ public class EnderDashboard extends EnderBaseScreen {
 
         this.layout.addFooter(footerLayout);
 
-        // Manual Body Layout
+        
         int headerHeight = this.layout.getHeaderHeight() + 10;
         int footerHeight = this.layout.getFooterHeight() + 10;
         
-        // Title
+        
         int titleY = headerHeight;
         Text title = Text.translatable("ender.dashboard.player_list");
         TextWidget titleWidget = new TextWidget(0, titleY, this.width, 20, title, this.textRenderer);
         titleWidget.alignCenter();
         this.addDrawableChild(titleWidget);
 
-        // List
+        
         int listTop = titleY + 25;
         int listBottom = this.height - footerHeight - 30;
         int listWidth = 300;
@@ -861,7 +865,7 @@ public class EnderDashboard extends EnderBaseScreen {
     }
 
     private void initRoomManagementContent() {
-        // Ensure roomRemark is synced from state before rendering
+        
         if (roomRemark == null || roomRemark.isEmpty()) {
             JsonObject state = EnderApiClient.getRoomManagementStateSync();
             if (state != null && state.has("room_remark")) {
@@ -869,34 +873,34 @@ public class EnderDashboard extends EnderBaseScreen {
             }
         }
 
-        // Use custom layout logic instead of DirectionalLayoutWidget container
-        // Left Menu
+        
+        
         int menuWidth = 120;
-        int spacing = 30; // Increased spacing
+        int spacing = 30; 
         int headerHeight = this.layout.getHeaderHeight() + 10;
         
-        // Fabric's ThreePartsLayoutWidget manages positions automatically,
-        // but we can manually position widgets by NOT adding them to layout.addBody(),
-        // and instead adding them to screen and setting positions manually in repositionElements (or here if static).
         
-        // However, ThreePartsLayoutWidget.addBody() is convenient for vertical flow.
-        // But to achieve "Menu Left, Content Right Centered", standard layout is tricky.
         
-        // Let's create two DirectionalLayoutWidgets, one for menu, one for content.
-        // And manually position them.
+        
+        
+        
+        
+        
+        
+        
         
         DirectionalLayoutWidget menu = DirectionalLayoutWidget.vertical().spacing(6);
-        menu.getMainPositioner().alignLeft(); // We want fixed width buttons
+        menu.getMainPositioner().alignLeft(); 
         for (RoomPage page : RoomPage.values()) {
             addRoomPageMenuButton(menu, page, menuWidth);
         }
         
-        // Position menu manually
+        
         menu.refreshPositions();
         menu.setX(10);
         menu.setY(headerHeight);
         
-        // We need to add menu buttons to screen
+        
         menu.forEachChild(this::addDrawableChild);
 
         DirectionalLayoutWidget pageContent = DirectionalLayoutWidget.vertical().spacing(12);
@@ -911,8 +915,8 @@ public class EnderDashboard extends EnderBaseScreen {
             case BACKEND -> addBackendPage(pageContent);
         }
         
-        // Position content manually
-        // Center in remaining space
+        
+        
         int contentXStart = menuWidth + spacing;
         int remainingWidth = this.width - contentXStart - 10;
         
@@ -925,7 +929,7 @@ public class EnderDashboard extends EnderBaseScreen {
         
         pageContent.forEachChild(this::addDrawableChild);
 
-        // We don't add body to layout anymore to avoid interference
+        
         
         if (currentMode == ViewMode.FULL) {
             this.layout.addFooter(net.minecraft.client.gui.widget.ButtonWidget.builder(
@@ -999,12 +1003,12 @@ public class EnderDashboard extends EnderBaseScreen {
         remarkBox.setPlaceholder(Text.literal("房间描述 (MOTD)"));
         remarkBox.setChangedListener(val -> {
             roomRemark = val;
-            // Don't set dirty immediately on typing, use save button
+            
         });
         remarkBox.setEditable(isHostConnected());
         remarkLayout.add(remarkBox);
         net.minecraft.client.gui.widget.ButtonWidget saveBtn = net.minecraft.client.gui.widget.ButtonWidget.builder(Text.literal("保存"), b -> {
-            // Apply the current value from the box to roomRemark before saving
+            
             roomRemark = remarkBox.getText();
             roomStateDirty = true;
             MinecraftEnderClient.showToast(Text.literal("提示"), Text.literal("房间描述已保存"));
@@ -1255,9 +1259,9 @@ public class EnderDashboard extends EnderBaseScreen {
              this.client.setScreen(new EditGameRulesScreen(new GameRules(), (rulesOpt) -> {
                  this.client.setScreen(this);
                  rulesOpt.ifPresent(r -> {
-                     // We can't easily sync back to our simple vars, but in singleplayer it applies directly.
-                     // For Ender, we might need to capture changes.
-                     // For now, just let user edit local rules, assuming host context.
+                     
+                     
+                     
                  });
              }));
         }).width(200).build());
@@ -1271,7 +1275,7 @@ public class EnderDashboard extends EnderBaseScreen {
         world.getMainPositioner().alignHorizontalCenter();
         world.add(new TextWidget(Text.literal(" 世界与边界 "), this.textRenderer));
         
-        // Auto-fill coordinates from player position
+        
         int fillX = respawnX;
         int fillY = respawnY;
         int fillZ = respawnZ;
@@ -1453,7 +1457,7 @@ public class EnderDashboard extends EnderBaseScreen {
             return;
         }
         
-        // Sync MOTD
+        
         if (this.roomRemark != null) {
             try {
                 server.setMotd(this.roomRemark);

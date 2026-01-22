@@ -2,16 +2,35 @@ package com.multiplayer.ender.logic;
 
 import java.util.Locale;
 
+/**
+ * 平台辅助工具类。
+ * 用于检测操作系统类型、CPU架构以及提供平台相关的文件名和端口操作。
+ *
+ * @author Ender Developer
+ * @version 1.0
+ * @since 1.0
+ */
 public class PlatformHelper {
 
+    /**
+     * 操作系统枚举。
+     */
     public enum OS {
         WINDOWS, LINUX, MACOS, ANDROID, UNKNOWN
     }
 
+    /**
+     * CPU架构枚举。
+     */
     public enum Arch {
         X86_64, ARM64, UNKNOWN
     }
 
+    /**
+     * 获取当前操作系统类型。
+     *
+     * @return 当前检测到的操作系统枚举值
+     */
     public static OS getOS() {
         String osName = System.getProperty("os.name").toLowerCase(Locale.ROOT);
         
@@ -30,6 +49,11 @@ public class PlatformHelper {
         return OS.UNKNOWN;
     }
 
+    /**
+     * 获取当前CPU架构类型。
+     *
+     * @return 当前检测到的CPU架构枚举值
+     */
     public static Arch getArch() {
         String osArch = System.getProperty("os.arch").toLowerCase(Locale.ROOT);
         
@@ -42,6 +66,12 @@ public class PlatformHelper {
         return Arch.UNKNOWN;
     }
 
+    /**
+     * 根据平台获取对应的下载文件名。
+     *
+     * @param version 需要下载的版本号
+     * @return 对应平台的压缩包文件名，如果不支持该平台则返回null
+     */
     public static String getDownloadFilename(String version) {
         OS os = getOS();
         Arch arch = getArch();
@@ -59,6 +89,12 @@ public class PlatformHelper {
         return null;
     }
 
+    /**
+     * 根据平台获取对应的可执行文件名。
+     *
+     * @param version 版本号（当前未使用）
+     * @return 可执行文件名（包含扩展名）
+     */
     public static String getExecutableName(String version) {
         OS os = getOS();
         if (os == OS.WINDOWS) {
@@ -67,10 +103,20 @@ public class PlatformHelper {
         return "easytier-core"; 
     }
 
+    /**
+     * 获取默认版本（2.4.5）的可执行文件名。
+     *
+     * @return 可执行文件名
+     */
     public static String getExecutableName() {
         return getExecutableName("2.4.5");
     }
 
+    /**
+     * 查找一个可用的本地端口。
+     *
+     * @return 可用的端口号，如果查找失败则返回-1
+     */
     public static int findAvailablePort() {
         try (java.net.ServerSocket socket = new java.net.ServerSocket(0)) {
             return socket.getLocalPort();

@@ -17,6 +17,10 @@ import net.minecraft.client.gui.Selectable;
 import com.google.common.collect.ImmutableList;
 import java.util.List;
 
+/**
+ * 房间名单管理屏幕（Fabric）。
+ * 允许房主管理白名单、黑名单和禁言列表。
+ */
 public class RoomListsScreen extends EnderBaseScreen {
     private static final Gson GSON = new Gson();
     private String currentTab = "whitelist"; 
@@ -29,6 +33,10 @@ public class RoomListsScreen extends EnderBaseScreen {
         super(Text.literal("名单管理"), parent);
     }
 
+    /**
+     * 初始化内容。
+     * 加载当前状态，创建玩家列表和底部操作按钮。
+     */
     @Override
     protected void initContent() {
         if (isLoading) {
@@ -44,10 +52,10 @@ public class RoomListsScreen extends EnderBaseScreen {
         }
         this.addDrawableChild(this.playerList);
 
-        // Footer
+        
         DirectionalLayoutWidget footer = DirectionalLayoutWidget.horizontal().spacing(10);
         
-        // View Switcher Button
+        
         this.viewSwitcherButton = ButtonWidget.builder(Text.literal("查看: " + getTabName(currentTab)), b -> {
             if ("whitelist".equals(currentTab)) {
                 switchTab("blacklist");
@@ -68,12 +76,21 @@ public class RoomListsScreen extends EnderBaseScreen {
         this.layout.addFooter(footer);
     }
 
+    /**
+     * 渲染屏幕。
+     * 绘制表头和加载状态提示。
+     *
+     * @param context 绘图上下文
+     * @param mouseX 鼠标 X
+     * @param mouseY 鼠标 Y
+     * @param partialTick 部分刻
+     */
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float partialTick) {
         super.render(context, mouseX, mouseY, partialTick);
         
-        // Draw List Header
-        int headerY = 20; // Moved up
+        
+        int headerY = 20; 
         int rowWidth = 300;
         int left = (this.width - rowWidth) / 2;
         
@@ -85,6 +102,12 @@ public class RoomListsScreen extends EnderBaseScreen {
         }
     }
     
+    /**
+     * 获取标签页名称。
+     *
+     * @param tab 标签页标识符
+     * @return 中文名称
+     */
     private String getTabName(String tab) {
         switch (tab) {
             case "whitelist": return "白名单";
@@ -94,6 +117,11 @@ public class RoomListsScreen extends EnderBaseScreen {
         }
     }
 
+    /**
+     * 切换标签页。
+     *
+     * @param tab 目标标签页标识符
+     */
     private void switchTab(String tab) {
         this.currentTab = tab;
         if (this.viewSwitcherButton != null) {
@@ -156,7 +184,7 @@ public class RoomListsScreen extends EnderBaseScreen {
         }
     }
 
-    // Explicitly expose removePlayer for inner class
+    
     protected void removePlayerFromList(String name) {
         removePlayer(name);
     }
@@ -173,10 +201,10 @@ public class RoomListsScreen extends EnderBaseScreen {
         stateJson.add(type, list);
         EnderApiClient.updateRoomManagementState(stateJson.toString());
         
-        // Show success toast
+        
         com.multiplayer.ender.fabric.MinecraftEnderClient.showToast(Text.literal("提示"), Text.literal("已添加玩家: " + name));
 
-        // Switch to the target list to show the new player
+        
         if (!this.currentTab.equals(type)) {
             this.currentTab = type;
             if (this.viewSwitcherButton != null) {
@@ -217,11 +245,11 @@ public class RoomListsScreen extends EnderBaseScreen {
             return 300;
         }
         
-        // Fabric Yarn usually has getScrollbarPositionX
-        // @Override
-        // protected int getScrollbarPositionX() {
-        //      return (this.width / 2) + (getRowWidth() / 2) + 6;
-        // }
+        
+        
+        
+        
+        
 
         public class Entry extends ElementListWidget.Entry<Entry> {
             private final String name;

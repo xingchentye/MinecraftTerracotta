@@ -25,15 +25,38 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.ScreenEvent;
 
 @EventBusSubscriber(modid = "ender_online", value = Dist.CLIENT)
+/**
+ * 局域网分享屏幕处理器。
+ * <p>
+ * 该类负责拦截并修改 Minecraft 的“对局域网开放”屏幕（ShareToLanScreen）。
+ * 它添加了一个“末影联机”开关，并劫持“开始局域网世界”按钮，
+ * 以便在开启局域网世界的同时启动末影联机房间托管。
+ * </p>
+ */
 public class LanShareHandler {
+    /** 是否开启末影联机功能的标志位 */
     private static boolean enableEnder = false;
     private static final Gson GSON = new Gson();
+    /** 用于后台轮询房间状态的调度线程池 */
     private static final ScheduledExecutorService ROOM_POLL_EXECUTOR = Executors.newSingleThreadScheduledExecutor(r -> {
         Thread thread = new Thread(r, "Ender-Room-Poll");
         thread.setDaemon(true);
         return thread;
     });
 
+    /**
+     * 当屏幕初始化完成后调用。
+     * <p>
+     * 此方法会在 {@link ShareToLanScreen} 初始化后触发。
+     * 它执行以下操作：
+     * 1. 添加一个切换“末影联机”开启状态的按钮。
+     * 2. 查找原版的“开始局域网世界”按钮，将其隐藏。
+     * 3. 添加一个新的“开始局域网世界”按钮，点击时会先调用原版逻辑，
+     *    如果开启了“末影联机”，则进一步尝试启动远程托管。
+     * </p>
+     *
+     * @param event 屏幕初始化后期事件
+     */
     @SubscribeEvent
     public static void onScreenInit(ScreenEvent.Init.Post event) {
         if (event.getScreen() instanceof ShareToLanScreen screen) {
@@ -89,7 +112,7 @@ public class LanShareHandler {
                         if (gameMode == net.minecraft.world.level.GameType.SPECTATOR) {
                             visitorPermission = "仅观战";
                         } else if (gameMode == net.minecraft.world.level.GameType.ADVENTURE) {
-                            // visitorPermission = "仅聊天";
+                            
                         }
                         
                         EnderApiClient.setLocalSettings(allowCheats, visitorPermission);
@@ -112,6 +135,15 @@ public class LanShareHandler {
         }
     }
 
+    /**
+     * 启动末影联机托管服务。
+     * <p>
+     * 该方法调用 {@link EnderApiClient#startHosting} 向后端申请房间号。
+     * 成功后会在聊天栏显示房间号通知。
+     * </p>
+     *
+     * @param port 本地局域网世界监听的端口号
+     */
     private static void startEnderHosting(int port) {
         Minecraft mc = Minecraft.getInstance();
 

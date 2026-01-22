@@ -19,6 +19,10 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import java.util.concurrent.CompletableFuture;
 
+/**
+ * 游戏菜单屏幕 Mixin（Fabric）。
+ * 在 GameMenuScreen（ESC 菜单）添加房间管理相关按钮。
+ */
 @Mixin(GameMenuScreen.class)
 public abstract class GameMenuScreenMixin extends Screen {
     private static final Gson GSON = new Gson();
@@ -35,6 +39,12 @@ public abstract class GameMenuScreenMixin extends Screen {
         super(title);
     }
 
+    /**
+     * 屏幕初始化后注入。
+     * 添加“显示信息”、“房间设置”和“创建房间”按钮。
+     *
+     * @param ci 回调信息
+     */
     @Inject(method = "init", at = @At("TAIL"))
     private void onInit(CallbackInfo ci) {
         int width = this.width;
@@ -218,16 +228,16 @@ public abstract class GameMenuScreenMixin extends Screen {
                                 createRoomBtn.visible = false;
                             }
                         } else {
-                            // Reset buttons when not connected
+                            
                             if (infoBtn != null) {
                                 infoBtn.visible = false;
                             }
                             if (settingsBtn != null) {
                                 settingsBtn.visible = false;
                             }
-                            // Re-check hosting capability
+                            
                             MinecraftClient mc = MinecraftClient.getInstance();
-                            boolean canHost = mc.world != null && mc.getServer() != null && !mc.getServer().isRemote(); // isRemote is false for IntegratedServer
+                            boolean canHost = mc.world != null && mc.getServer() != null && !mc.getServer().isRemote(); 
                             
                             if (createRoomBtn != null) {
                                 if (canHost) {

@@ -40,8 +40,14 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 
+ 
 /**
- * Core WebSocket 客户端：提供连接管理、请求/响应与状态观测能力。
+ * 核心 WebSocket 客户端实现。
+ * 负责管理 WebSocket 连接、发送请求、处理响应和事件、以及自动重连。
+ *
+ * @author Ender Developer
+ * @version 1.0
+ * @since 1.0
  */
 public final class CoreWebSocketClient implements CoreConnectionManager, CoreMessageClient, CoreStateMonitor {
     private final Object lifecycleLock = new Object();
@@ -52,11 +58,34 @@ public final class CoreWebSocketClient implements CoreConnectionManager, CoreMes
     private final ConcurrentHashMap<Long, PendingRequest> pending = new ConcurrentHashMap<>();
     private final AtomicLong requestIdSeq = new AtomicLong(1);
 
+    /**
+     * 客户端配置
+     */
     private final CoreWebSocketConfig config;
+    
+    /**
+     * 异常处理器
+     */
     private final CoreExceptionHandler exceptionHandler;
+    
+    /**
+     * 回调执行器
+     */
     private final Executor callbackExecutor;
+    
+    /**
+     * 调度执行器
+     */
     private final ScheduledExecutorService scheduler;
+    
+    /**
+     * 帧编解码器
+     */
     private final CoreFrameCodec codec;
+    
+    /**
+     * 连接指标
+     */
     private final ConnectionMetrics metrics = new ConnectionMetrics();
 
     private volatile URI endpoint;
@@ -66,11 +95,11 @@ public final class CoreWebSocketClient implements CoreConnectionManager, CoreMes
     private volatile Duration dynamicBackoff;
 
     /**
-     * 创建 Core WebSocket 客户端。
+     * 构造函数。
      *
-     * @param config           配置
-     * @param exceptionHandler 异常回调（可为 null）
-     * @param callbackExecutor 状态回调执行器（可为 null）
+     * @param config 客户端配置
+     * @param exceptionHandler 异常处理器，如果为 null 则使用 NoopExceptionHandler
+     * @param callbackExecutor 回调执行器，如果为 null 则使用 CachedThreadPool
      */
     public CoreWebSocketClient(CoreWebSocketConfig config, CoreExceptionHandler exceptionHandler, Executor callbackExecutor) {
         this.config = Objects.requireNonNull(config, "config");
@@ -87,7 +116,10 @@ public final class CoreWebSocketClient implements CoreConnectionManager, CoreMes
 
     @Override
     /**
-     * 连接到指定 WebSocket 服务端。
+     * 连接到指定端点。
+     *
+     * @param endpoint 连接端点 URI
+     * @return 连接 Future
      */
     public CompletableFuture<Void> connect(URI endpoint) {
         Objects.requireNonNull(endpoint, "endpoint");
@@ -129,7 +161,10 @@ public final class CoreWebSocketClient implements CoreConnectionManager, CoreMes
 
     @Override
     /**
-     * 关闭连接并回收 pending 请求。
+     * 关闭连接。
+     *
+     * @param timeout 超时时间
+     * @return 关闭 Future
      */
     public CompletableFuture<Void> close(Duration timeout) {
         Objects.requireNonNull(timeout, "timeout");
@@ -166,6 +201,8 @@ public final class CoreWebSocketClient implements CoreConnectionManager, CoreMes
     @Override
     /**
      * 获取当前连接状态。
+     *
+     * @return 连接状态
      */
     public ConnectionState state() {
         return state.get();
@@ -173,7 +210,9 @@ public final class CoreWebSocketClient implements CoreConnectionManager, CoreMes
 
     @Override
     /**
-     * 判断当前是否处于已连接状态。
+     * 检查是否已连接。
+     *
+     * @return 如果已连接则返回 true，否则返回 false
      */
     public boolean isConnected() {
         return state.get() == ConnectionState.CONNECTED;
@@ -181,7 +220,11 @@ public final class CoreWebSocketClient implements CoreConnectionManager, CoreMes
 
     @Override
     /**
-     * 异步发送请求并返回 future。
+     * 异步发送请求。
+     *
+     * @param kind 请求类型
+     * @param payload 请求负载
+     * @return 响应 Future
      */
     public CompletableFuture<CoreResponse> sendAsync(String kind, byte[] payload) {
         CoreKinds.validate(kind);
@@ -224,7 +267,13 @@ public final class CoreWebSocketClient implements CoreConnectionManager, CoreMes
 
     @Override
     /**
-     * 同步发送请求并等待响应，超时会抛出异常。
+     * 同步发送请求。
+     *
+     * @param kind 请求类型
+     * @param payload 请求负载
+     * @param timeout 超时时间
+     * @return 响应对象
+     * @throws CoreConnectException 当连接错误或发送失败时抛出
      */
     public CoreResponse sendSync(String kind, byte[] payload, Duration timeout) {
         Objects.requireNonNull(timeout, "timeout");
@@ -240,7 +289,11 @@ public final class CoreWebSocketClient implements CoreConnectionManager, CoreMes
 
     @Override
     /**
-     * 发送单向事件，不等待响应。
+     * 发送事件。
+     *
+     * @param kind 事件类型
+     * @param payload 事件负载
+     * @throws CoreClosedException 当连接不可用时抛出
      */
     public void sendEvent(String kind, byte[] payload) {
         CoreKinds.validate(kind);
@@ -255,7 +308,9 @@ public final class CoreWebSocketClient implements CoreConnectionManager, CoreMes
 
     @Override
     /**
-     * 获取指标快照。
+     * 获取连接指标快照。
+     *
+     * @return 连接指标快照
      */
     public ConnectionMetricsSnapshot metrics() {
         return metrics.snapshot(pending.size());
@@ -263,17 +318,19 @@ public final class CoreWebSocketClient implements CoreConnectionManager, CoreMes
 
     @Override
     /**
-     * 订阅连接状态变化事件。
+     * 注册状态变更监听器。
+     *
+     * @param listener 状态变更监听器
      */
     public void onStateChanged(BiConsumer<ConnectionState, ConnectionState> listener) {
         stateListeners.add(Objects.requireNonNull(listener, "listener"));
     }
 
     /**
-     * 订阅指定 kind 的事件。
+     * 注册特定类型的事件监听器。
      *
-     * @param kind     事件 kind（namespace:path）
-     * @param listener 监听器
+     * @param kind 事件类型
+     * @param listener 事件监听器
      */
     public void onEvent(String kind, CoreEventListener listener) {
         CoreKinds.validate(kind);
@@ -282,22 +339,27 @@ public final class CoreWebSocketClient implements CoreConnectionManager, CoreMes
     }
 
     /**
-     * 订阅所有事件。
+     * 注册全局事件监听器。
      *
-     * @param listener 监听器
+     * @param listener 事件监听器
      */
     public void onAnyEvent(CoreEventListener listener) {
         anyEventListeners.add(Objects.requireNonNull(listener, "listener"));
     }
 
     /**
-     * 创建底层 WebSocketClient 并绑定回调。
+     * 创建内部 WebSocket 客户端。
+     *
+     * @param endpoint 连接端点
+     * @return WebSocketClient 实例
      */
     private WebSocketClient newClient(URI endpoint) {
         return new WebSocketClient(endpoint) {
             @Override
             /**
-             * WebSocket 握手完成。
+             * 当连接打开时调用。
+             *
+             * @param handshakedata 握手数据
              */
             public void onOpen(ServerHandshake handshakedata) {
                 dynamicBackoff = config.reconnectBackoffMin();
@@ -310,7 +372,10 @@ public final class CoreWebSocketClient implements CoreConnectionManager, CoreMes
 
             @Override
             /**
-             * 收到文本帧时按协议错误处理并关闭连接。
+             * 当接收到文本消息时调用。
+             * 本客户端不支持文本帧，将关闭连接。
+             *
+             * @param message 文本消息
              */
             public void onMessage(String message) {
                 metrics.onProtocolError();
@@ -321,7 +386,9 @@ public final class CoreWebSocketClient implements CoreConnectionManager, CoreMes
 
             @Override
             /**
-             * 收到二进制帧并进行协议解码与响应分发。
+             * 当接收到二进制消息时调用。
+             *
+             * @param bytes 二进制数据
              */
             public void onMessage(ByteBuffer bytes) {
                 metrics.onFrameReceived(bytes.remaining());
@@ -351,7 +418,11 @@ public final class CoreWebSocketClient implements CoreConnectionManager, CoreMes
 
             @Override
             /**
-             * WebSocket 连接关闭回调。
+             * 当连接关闭时调用。
+             *
+             * @param code 关闭代码
+             * @param reason 关闭原因
+             * @param remote 是否由远程关闭
              */
             public void onClose(int code, String reason, boolean remote) {
                 if (closing) {
@@ -370,7 +441,9 @@ public final class CoreWebSocketClient implements CoreConnectionManager, CoreMes
 
             @Override
             /**
-             * WebSocket 底层错误回调。
+             * 当发生错误时调用。
+             *
+             * @param ex 异常对象
              */
             public void onError(Exception ex) {
                 exceptionHandler.onConnectionError(new CoreConnectException("连接错误: " + endpoint, ex));
@@ -379,7 +452,9 @@ public final class CoreWebSocketClient implements CoreConnectionManager, CoreMes
     }
 
     /**
-     * 处理响应帧：匹配 pending 请求并完成对应 future。
+     * 处理响应帧。
+     *
+     * @param frame 响应帧
      */
     private void onResponseFrame(CoreFrame frame) {
         metrics.onResponseReceived();
@@ -403,7 +478,9 @@ public final class CoreWebSocketClient implements CoreConnectionManager, CoreMes
     }
 
     /**
-     * 处理事件帧：分发到订阅监听器。
+     * 处理事件帧。
+     *
+     * @param frame 事件帧
      */
     private void onEventFrame(CoreFrame frame) {
         CopyOnWriteArrayList<CoreEventListener> specific = eventListeners.get(frame.kind());
@@ -418,14 +495,16 @@ public final class CoreWebSocketClient implements CoreConnectionManager, CoreMes
     }
 
     /**
-     * 处理心跳帧：当前用于标记连接活跃。
+     * 处理心跳帧。
+     *
+     * @param frame 心跳帧
      */
     private void onHeartbeatFrame(CoreFrame frame) {
         metrics.setLastRttMillis(0);
     }
 
     /**
-     * 计划一次重连（带退避与抖动）。
+     * 调度重连。
      */
     private void scheduleReconnect() {
         Duration backoff = dynamicBackoff;
@@ -445,6 +524,9 @@ public final class CoreWebSocketClient implements CoreConnectionManager, CoreMes
 
     /**
      * 计算下一次重连退避时间。
+     *
+     * @param current 当前退避时间
+     * @return 下一次退避时间
      */
     private Duration nextBackoff(Duration current) {
         long next = Math.min(current.toMillis() * 2L, config.reconnectBackoffMax().toMillis());
@@ -452,7 +534,7 @@ public final class CoreWebSocketClient implements CoreConnectionManager, CoreMes
     }
 
     /**
-     * 启动心跳定时任务。
+     * 调度心跳发送。
      */
     private void scheduleHeartbeat() {
         Duration interval = config.heartbeatInterval();
@@ -474,7 +556,9 @@ public final class CoreWebSocketClient implements CoreConnectionManager, CoreMes
     }
 
     /**
-     * 切换连接状态并触发订阅回调。
+     * 设置连接状态。
+     *
+     * @param newState 新状态
      */
     private void setState(ConnectionState newState) {
         ConnectionState old = state.getAndSet(newState);
@@ -487,7 +571,9 @@ public final class CoreWebSocketClient implements CoreConnectionManager, CoreMes
     }
 
     /**
-     * 将所有 pending 请求以指定异常失败，并清空映射。
+     * 使所有挂起的请求失败。
+     *
+     * @param error 异常对象
      */
     private void failPending(RuntimeException error) {
         for (PendingRequest pr : pending.values()) {
@@ -497,6 +583,9 @@ public final class CoreWebSocketClient implements CoreConnectionManager, CoreMes
         pending.clear();
     }
 
+    /**
+     * 挂起的请求信息。
+     */
     private static final class PendingRequest {
         private final String kind;
         private final long startNanos;
@@ -504,7 +593,12 @@ public final class CoreWebSocketClient implements CoreConnectionManager, CoreMes
         private final ScheduledFuture<?> timeoutTask;
 
         /**
-         * 构建 pending 请求上下文。
+         * 构造函数。
+         *
+         * @param kind 请求类型
+         * @param startNanos 开始时间（纳秒）
+         * @param future 响应 Future
+         * @param timeoutTask 超时任务
          */
         private PendingRequest(String kind, long startNanos, CompletableFuture<CoreResponse> future, ScheduledFuture<?> timeoutTask) {
             this.kind = kind;
@@ -514,31 +608,42 @@ public final class CoreWebSocketClient implements CoreConnectionManager, CoreMes
         }
     }
 
+    /**
+     * 空操作异常处理器。
+     */
     private static final class NoopExceptionHandler implements CoreExceptionHandler {
         @Override
         /**
-         * 忽略连接异常。
+         * 处理连接错误。
+         *
+         * @param error 异常对象
          */
         public void onConnectionError(Throwable error) {
         }
 
         @Override
         /**
-         * 忽略协议异常。
+         * 处理协议错误。
+         *
+         * @param error 异常对象
          */
         public void onProtocolError(Throwable error) {
         }
 
         @Override
         /**
-         * 忽略远端业务异常。
+         * 处理远程错误。
+         *
+         * @param error 异常对象
          */
         public void onRemoteError(Throwable error) {
         }
 
         @Override
         /**
-         * 忽略超时异常。
+         * 处理超时错误。
+         *
+         * @param error 异常对象
          */
         public void onTimeout(Throwable error) {
         }

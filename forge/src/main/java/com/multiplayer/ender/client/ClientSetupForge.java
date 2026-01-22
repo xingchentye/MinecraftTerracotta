@@ -26,6 +26,10 @@ import net.minecraftforge.client.event.ScreenEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
+/**
+ * 客户端启动设置（Forge）。
+ * 处理客户端初始化逻辑，包括自动启动后台、状态轮询和通知显示。
+ */
 @Mod.EventBusSubscriber(modid = "ender_online", value = Dist.CLIENT, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class ClientSetupForge {
     private static final Logger LOGGER = LoggerFactory.getLogger(ClientSetupForge.class);
@@ -37,6 +41,10 @@ public class ClientSetupForge {
     private static String lastStateValue = "";
     private static java.util.Set<String> lastMemberNames = new java.util.HashSet<>();
 
+    /**
+     * 简单的 Toast 通知实现类。
+     * 用于在游戏内显示临时的浮动通知。
+     */
     private static class SimpleToast implements Toast {
         private final Component title;
         private final Component message;
@@ -80,11 +88,24 @@ public class ClientSetupForge {
         }
     }
 
+    /**
+     * 显示 Toast 通知。
+     *
+     * @param title 标题
+     * @param message 内容（可选）
+     */
     public static void showToast(Component title, Component message) {
         Minecraft mc = Minecraft.getInstance();
         mc.getToasts().addToast(new SimpleToast(title, message));
     }
 
+    /**
+     * 计算 Toast 的宽度。
+     *
+     * @param title 标题
+     * @param message 内容
+     * @return 宽度
+     */
     private static int calculateToastWidth(Component title, Component message) {
         Minecraft mc = Minecraft.getInstance();
         if (mc == null || mc.font == null) {

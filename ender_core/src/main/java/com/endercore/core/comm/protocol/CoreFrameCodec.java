@@ -5,16 +5,25 @@ import com.endercore.core.comm.exception.CoreProtocolException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 
+ 
 /**
- * ECWS/1 帧编解码器。
+ * 协议帧编解码器。
+ * 负责将 CoreFrame 对象编码为字节数组，以及将 ByteBuffer 解码为 CoreFrame 对象。
+ *
+ * @author Ender Developer
+ * @version 1.0
+ * @since 1.0
  */
 public final class CoreFrameCodec {
+    /**
+     * 最大帧大小（字节）
+     */
     private final int maxFrameBytes;
 
     /**
-     * 创建编解码器。
+     * 构造函数。
      *
-     * @param maxFrameBytes 最大帧大小
+     * @param maxFrameBytes 最大帧大小（字节），必须大于协议头长度
      */
     public CoreFrameCodec(int maxFrameBytes) {
         if (maxFrameBytes < CoreProtocol.HEADER_BYTES) {
@@ -24,10 +33,11 @@ public final class CoreFrameCodec {
     }
 
     /**
-     * 将帧编码为二进制数组，用于 WebSocket binary frame 发送。
+     * 编码帧。
      *
-     * @param frame 帧对象
-     * @return 编码后字节数组
+     * @param frame 协议帧对象
+     * @return 编码后的字节数组
+     * @throws CoreProtocolException 当帧大小超过上限或格式非法时抛出
      */
     public byte[] encode(CoreFrame frame) {
         byte[] kindBytes = frame.kind().getBytes(StandardCharsets.UTF_8);
@@ -61,10 +71,11 @@ public final class CoreFrameCodec {
     }
 
     /**
-     * 从二进制缓冲区解码得到帧对象。
+     * 解码帧。
      *
-     * @param input 输入缓冲区
-     * @return 帧对象
+     * @param input 输入 ByteBuffer
+     * @return 解码后的协议帧对象
+     * @throws CoreProtocolException 当帧格式非法或大小超过上限时抛出
      */
     public CoreFrame decode(ByteBuffer input) {
         if (input == null) {

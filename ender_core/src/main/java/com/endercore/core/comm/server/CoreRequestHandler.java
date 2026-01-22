@@ -2,17 +2,23 @@ package com.endercore.core.comm.server;
 
 import com.endercore.core.comm.protocol.CoreResponse;
 
+ 
 /**
- * 请求处理器：将请求映射为响应。
+ * 核心请求处理器接口。
+ * 用于处理 WebSocket 接收到的请求。
+ *
+ * @author Ender Developer
+ * @version 1.0
+ * @since 1.0
  */
 @FunctionalInterface
 public interface CoreRequestHandler {
     /**
-     * 处理请求并返回响应。
+     * 处理请求。
      *
-     * @param request 请求
-     * @return 响应
-     * @throws Exception 处理过程中的异常
+     * @param request 请求对象
+     * @return 响应对象
+     * @throws Exception 当处理失败时抛出
      */
     CoreResponse handle(CoreRequest request) throws Exception;
 }

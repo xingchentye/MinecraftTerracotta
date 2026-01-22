@@ -7,14 +7,33 @@ import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
+/**
+ * 末影联机大厅界面。
+ * 提供简单的聊天和状态展示功能。
+ *
+ * @author Ender Developer
+ * @version 1.0
+ * @since 1.0
+ */
 public class LobbyScreen extends EnderBaseScreen {
+    /** 聊天输入框 */
     private EditBox chatBox;
+    /** 发送按钮 */
     private Button sendBtn;
 
+    /**
+     * 构造函数。
+     *
+     * @param parent 父屏幕
+     */
     public LobbyScreen(Screen parent) {
         super(Component.translatable("menu.ender_online.lobby.title"), parent);
     }
 
+    /**
+     * 初始化界面内容。
+     * 创建聊天框和按钮。
+     */
     @Override
     protected void initContent() {
         this.layout.addToFooter(Button.builder(Component.literal("断开连接"), (button) -> {
@@ -34,6 +53,10 @@ public class LobbyScreen extends EnderBaseScreen {
         this.addRenderableWidget(this.sendBtn);
     }
 
+    /**
+     * 重新排列元素。
+     * 确保聊天框和按钮位于底部。
+     */
     @Override
     protected void repositionElements() {
         super.repositionElements();
@@ -55,6 +78,10 @@ public class LobbyScreen extends EnderBaseScreen {
         guiGraphics.drawCenteredString(this.font, Component.literal("欢迎来到末影联机大厅"), this.width / 2, this.height / 2 - 20, 0x00FF00);
     }
 
+    /**
+     * 关闭屏幕。
+     * 断开网络连接并返回。
+     */
     @Override
     public void onClose() {
         NetworkClient.getInstance().close();

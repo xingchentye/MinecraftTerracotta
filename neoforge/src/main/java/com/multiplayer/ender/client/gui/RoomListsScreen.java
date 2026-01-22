@@ -14,18 +14,40 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.NotNull;
 
+/**
+ * 名单管理界面。
+ * 用于管理房间的白名单、黑名单和禁言列表。
+ *
+ * @author Ender Developer
+ * @version 1.0
+ * @since 1.0
+ */
 public class RoomListsScreen extends EnderBaseScreen {
     private static final Gson GSON = new Gson();
+    /** 当前选中的标签页（whitelist, blacklist, mute_list） */
     private String currentTab = "whitelist"; 
+    /** 房间管理状态数据 */
     private JsonObject stateJson;
+    /** 是否正在加载数据 */
     private boolean isLoading = true;
+    /** 玩家列表控件 */
     private PlayerList playerList;
+    /** 视图切换按钮 */
     private Button viewSwitcherButton;
 
+    /**
+     * 构造函数。
+     *
+     * @param parent 父屏幕
+     */
     public RoomListsScreen(Screen parent) {
         super(Component.literal("名单管理"), parent);
     }
 
+    /**
+     * 初始化界面内容。
+     * 创建列表控件和底部按钮。
+     */
     @Override
     protected void initContent() {
         if (isLoading) {
@@ -41,10 +63,10 @@ public class RoomListsScreen extends EnderBaseScreen {
         }
         this.addRenderableWidget(this.playerList);
 
-        // Footer
+        
         LinearLayout footer = LinearLayout.horizontal().spacing(10);
         
-        // View Switcher Button
+        
         this.viewSwitcherButton = Button.builder(Component.literal("查看: " + getTabName(currentTab)), b -> {
             if ("whitelist".equals(currentTab)) {
                 switchTab("blacklist");
@@ -65,12 +87,21 @@ public class RoomListsScreen extends EnderBaseScreen {
         this.layout.addToFooter(footer);
     }
 
+    /**
+     * 渲染界面。
+     * 绘制标题和列表头。
+     *
+     * @param guiGraphics 图形上下文
+     * @param mouseX      鼠标 X 坐标
+     * @param mouseY      鼠标 Y 坐标
+     * @param partialTick 部分刻
+     */
     @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         super.render(guiGraphics, mouseX, mouseY, partialTick);
         
-        // Draw List Header
-        int headerY = 20; // Moved up
+        
+        int headerY = 20; 
         int rowWidth = 300;
         int left = (this.width - rowWidth) / 2;
         
@@ -82,8 +113,14 @@ public class RoomListsScreen extends EnderBaseScreen {
         }
     }
     
-    // ... (rest of methods)
+    
 
+    /**
+     * 获取标签页显示名称。
+     *
+     * @param tab 标签页标识
+     * @return 显示名称
+     */
     private String getTabName(String tab) {
         switch (tab) {
             case "whitelist": return "白名单";
@@ -93,6 +130,11 @@ public class RoomListsScreen extends EnderBaseScreen {
         }
     }
 
+    /**
+     * 切换标签页。
+     *
+     * @param tab 目标标签页
+     */
     private void switchTab(String tab) {
         this.currentTab = tab;
         if (this.viewSwitcherButton != null) {
@@ -101,6 +143,10 @@ public class RoomListsScreen extends EnderBaseScreen {
         reloadPlayerList();
     }
 
+    /**
+     * 重新加载玩家列表。
+     * 根据当前状态和标签页更新列表内容。
+     */
     private void reloadPlayerList() {
         if (this.playerList == null) {
             return;
@@ -108,6 +154,9 @@ public class RoomListsScreen extends EnderBaseScreen {
         this.playerList.reloadFromState(this.stateJson, this.currentTab);
     }
 
+    /**
+     * 从后端加载房间管理状态。
+     */
     private void loadState() {
         EnderApiClient.getRoomManagementState().whenComplete((jsonStr, throwable) -> {
             if (throwable != null) {
@@ -127,6 +176,11 @@ public class RoomListsScreen extends EnderBaseScreen {
         });
     }
 
+    /**
+     * 移除玩家。
+     *
+     * @param name 玩家名称
+     */
     private void removePlayer(String name) {
         if (stateJson == null) return;
         JsonArray list = stateJson.has(currentTab) ? stateJson.getAsJsonArray(currentTab) : new JsonArray();
@@ -147,6 +201,9 @@ public class RoomListsScreen extends EnderBaseScreen {
         }
     }
 
+    /**
+     * 打开添加玩家对话框。
+     */
     private void openAddDialog() {
         if (this.minecraft != null) {
             this.minecraft.setScreen(new AddListEntryScreen(this, this.currentTab, (name, type) -> {
@@ -155,11 +212,21 @@ public class RoomListsScreen extends EnderBaseScreen {
         }
     }
     
-    // Explicitly expose removePlayer for inner class
+    /**
+     * 从列表中移除玩家的回调。
+     *
+     * @param name 玩家名称
+     */
     protected void removePlayerFromList(String name) {
         removePlayer(name);
     }
 
+    /**
+     * 添加玩家。
+     *
+     * @param name 玩家名称
+     * @param type 列表类型
+     */
     private void addPlayer(String name, String type) {
         if (stateJson == null || name == null || name.isBlank()) return;
         JsonArray list = stateJson.has(type) ? stateJson.getAsJsonArray(type) : new JsonArray();
@@ -172,10 +239,10 @@ public class RoomListsScreen extends EnderBaseScreen {
         stateJson.add(type, list);
         EnderApiClient.updateRoomManagementState(stateJson.toString());
         
-        // Show success toast
+        
         com.multiplayer.ender.client.ClientSetup.showToast(Component.literal("提示"), Component.literal("已添加玩家: " + name));
 
-        // Switch to the target list to show the new player
+        
         if (!this.currentTab.equals(type)) {
             this.currentTab = type;
             if (this.viewSwitcherButton != null) {
@@ -188,15 +255,38 @@ public class RoomListsScreen extends EnderBaseScreen {
         }
     }
 
+    /**
+     * 玩家列表控件。
+     * 用于显示和管理玩家条目。
+     */
     class PlayerList extends ObjectSelectionList<PlayerList.Entry> {
+        /**
+         * 构造函数。
+         *
+         * @param mc     Minecraft 实例
+         * @param width  宽度
+         * @param height 高度
+         * @param top    顶部位置
+         */
         public PlayerList(Minecraft mc, int width, int height, int top) {
             super(mc, width, height, top, 24);
         }
         
+        /**
+         * 添加玩家条目。
+         *
+         * @param name 玩家名称
+         */
         public void addPlayer(String name) {
             this.addEntry(new Entry(name));
         }
 
+        /**
+         * 从状态重新加载列表。
+         *
+         * @param state 状态对象
+         * @param tab   当前标签页
+         */
         public void reloadFromState(JsonObject state, String tab) {
             this.clearEntries();
             if (state == null) {
@@ -220,10 +310,18 @@ public class RoomListsScreen extends EnderBaseScreen {
             return (this.width / 2) + (getRowWidth() / 2) + 6;
         }
 
+        /**
+         * 列表条目类。
+         */
         public class Entry extends ObjectSelectionList.Entry<Entry> {
             private final String name;
             private final Button removeBtn;
             
+            /**
+             * 构造函数。
+             *
+             * @param name 玩家名称
+             */
             public Entry(String name) {
                 this.name = name;
                 this.removeBtn = Button.builder(Component.literal("移除"), b -> RoomListsScreen.this.removePlayerFromList(name)).width(50).build();

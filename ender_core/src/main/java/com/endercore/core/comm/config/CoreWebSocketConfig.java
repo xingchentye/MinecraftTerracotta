@@ -2,8 +2,14 @@ package com.endercore.core.comm.config;
 
 import java.time.Duration;
 
+ 
 /**
- * Core WebSocket 通信配置。
+ * WebSocket 客户端配置。
+ * 用于配置 CoreWebSocketClient 的各种参数。
+ *
+ * @author Ender Developer
+ * @version 1.0
+ * @since 1.0
  */
 public final class CoreWebSocketConfig {
     private final Duration connectTimeout;
@@ -25,63 +31,79 @@ public final class CoreWebSocketConfig {
     }
 
     /**
-     * 连接建立超时。
+     * 获取连接超时时间。
+     *
+     * @return 连接超时时间
      */
     public Duration connectTimeout() {
         return connectTimeout;
     }
 
     /**
-     * 默认请求超时（用于 sendAsync）。
+     * 获取请求超时时间。
+     *
+     * @return 请求超时时间
      */
     public Duration requestTimeout() {
         return requestTimeout;
     }
 
     /**
-     * 心跳发送间隔，<=0 表示关闭心跳。
+     * 获取心跳间隔。
+     *
+     * @return 心跳间隔
      */
     public Duration heartbeatInterval() {
         return heartbeatInterval;
     }
 
     /**
-     * 是否启用断线自动重连。
+     * 获取是否自动重连。
+     *
+     * @return 是否自动重连
      */
     public boolean autoReconnect() {
         return autoReconnect;
     }
 
     /**
-     * 重连退避最小值。
+     * 获取最小重连退避时间。
+     *
+     * @return 最小重连退避时间
      */
     public Duration reconnectBackoffMin() {
         return reconnectBackoffMin;
     }
 
     /**
-     * 重连退避最大值。
+     * 获取最大重连退避时间。
+     *
+     * @return 最大重连退避时间
      */
     public Duration reconnectBackoffMax() {
         return reconnectBackoffMax;
     }
 
     /**
-     * 单帧最大字节数（协议与库共同限制）。
+     * 获取最大帧大小（字节）。
+     *
+     * @return 最大帧大小
      */
     public int maxFrameBytes() {
         return maxFrameBytes;
     }
 
     /**
-     * 创建配置构建器。
+     * 获取配置构建器。
+     *
+     * @return 构建器实例
      */
     public static Builder builder() {
         return new Builder();
     }
 
     /**
-     * 配置构建器。
+     * 配置构建器类。
      */
     public static final class Builder {
         private Duration connectTimeout = Duration.ofSeconds(5);
@@ -93,7 +115,10 @@ public final class CoreWebSocketConfig {
         private int maxFrameBytes = 4 * 1024 * 1024;
 
         /**
-         * 设置连接建立超时。
+         * 设置连接超时时间。
+         *
+         * @param connectTimeout 连接超时时间
+         * @return 构建器实例
          */
         public Builder connectTimeout(Duration connectTimeout) {
             this.connectTimeout = connectTimeout;
@@ -101,7 +126,10 @@ public final class CoreWebSocketConfig {
         }
 
         /**
-         * 设置默认请求超时。
+         * 设置请求超时时间。
+         *
+         * @param requestTimeout 请求超时时间
+         * @return 构建器实例
          */
         public Builder requestTimeout(Duration requestTimeout) {
             this.requestTimeout = requestTimeout;
@@ -110,6 +138,9 @@ public final class CoreWebSocketConfig {
 
         /**
          * 设置心跳间隔。
+         *
+         * @param heartbeatInterval 心跳间隔
+         * @return 构建器实例
          */
         public Builder heartbeatInterval(Duration heartbeatInterval) {
             this.heartbeatInterval = heartbeatInterval;
@@ -117,7 +148,10 @@ public final class CoreWebSocketConfig {
         }
 
         /**
-         * 设置是否启用自动重连。
+         * 设置是否自动重连。
+         *
+         * @param autoReconnect 是否自动重连
+         * @return 构建器实例
          */
         public Builder autoReconnect(boolean autoReconnect) {
             this.autoReconnect = autoReconnect;
@@ -125,7 +159,10 @@ public final class CoreWebSocketConfig {
         }
 
         /**
-         * 设置重连退避最小值。
+         * 设置最小重连退避时间。
+         *
+         * @param reconnectBackoffMin 最小重连退避时间
+         * @return 构建器实例
          */
         public Builder reconnectBackoffMin(Duration reconnectBackoffMin) {
             this.reconnectBackoffMin = reconnectBackoffMin;
@@ -133,7 +170,10 @@ public final class CoreWebSocketConfig {
         }
 
         /**
-         * 设置重连退避最大值。
+         * 设置最大重连退避时间。
+         *
+         * @param reconnectBackoffMax 最大重连退避时间
+         * @return 构建器实例
          */
         public Builder reconnectBackoffMax(Duration reconnectBackoffMax) {
             this.reconnectBackoffMax = reconnectBackoffMax;
@@ -141,7 +181,10 @@ public final class CoreWebSocketConfig {
         }
 
         /**
-         * 设置单帧最大字节数。
+         * 设置最大帧大小。
+         *
+         * @param maxFrameBytes 最大帧大小（字节）
+         * @return 构建器实例
          */
         public Builder maxFrameBytes(int maxFrameBytes) {
             this.maxFrameBytes = maxFrameBytes;
@@ -150,6 +193,8 @@ public final class CoreWebSocketConfig {
 
         /**
          * 构建配置对象。
+         *
+         * @return 配置对象
          */
         public CoreWebSocketConfig build() {
             return new CoreWebSocketConfig(this);

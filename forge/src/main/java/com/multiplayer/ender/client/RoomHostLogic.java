@@ -13,12 +13,23 @@ import net.minecraft.world.level.GameType;
 
 import java.util.List;
 
+/**
+ * 房间托管逻辑处理类。
+ * 负责在房主端同步 Minecraft 服务器状态（如游戏规则、权限）到后端。
+ */
 public class RoomHostLogic {
     private static int tickCounter = 0;
     private static boolean initialized = false;
 
+    /**
+     * 每 Tick 执行的逻辑。
+     * 只有当当前状态为 HOSTING 时才执行同步。
+     * 每 20 tick（约 1 秒）执行一次。
+     *
+     * @param server Minecraft 服务器实例
+     */
     public static void onServerTick(MinecraftServer server) {
-        if (tickCounter++ % 20 != 0) return; // Run once per second
+        if (tickCounter++ % 20 != 0) return; 
 
         if (EnderApiClient.getCurrentState() != EnderApiClient.State.HOSTING) {
             initialized = false;
@@ -36,13 +47,19 @@ public class RoomHostLogic {
         applyState(server, state);
     }
 
+    /**
+     * 将 Minecraft 服务器的配置同步到后端。
+     * 包括 PVP、作弊权限、出生点保护、游戏规则（死亡不掉落、天气锁定等）。
+     *
+     * @param server Minecraft 服务器实例
+     */
     private static void syncFromMinecraft(MinecraftServer server) {
         JsonObject update = new JsonObject();
         
-        // PVP
+        
         update.addProperty("allow_pvp", server.isPvpAllowed());
         
-        // Cheats
+        
         boolean allowCheats = false;
         try {
              Object playerList = server.getPlayerList();
@@ -57,7 +74,7 @@ public class RoomHostLogic {
         }
         update.addProperty("allow_cheats", allowCheats);
         
-        // Spawn Protection
+        
         int spawnProtection = 0;
         try {
              java.lang.reflect.Method m = server.getClass().getMethod("getSpawnProtectionRadius");
@@ -71,7 +88,7 @@ public class RoomHostLogic {
         }
         update.addProperty("spawn_protection", spawnProtection);
 
-        // Game Rules
+        
         GameRules rules = server.getGameRules();
         update.addProperty("keep_inventory", rules.getBoolean(GameRules.RULE_KEEPINVENTORY));
         update.addProperty("weather_lock", !rules.getBoolean(GameRules.RULE_WEATHER_CYCLE));
@@ -85,6 +102,14 @@ public class RoomHostLogic {
         EnderApiClient.updateRoomManagementState(update.toString());
     }
 
+    /**
+     * 反射获取布尔类型的游戏规则值。
+     * 兼容不同 Minecraft 版本的字段名称。
+     *
+     * @param server Minecraft 服务器实例
+     * @param fieldNames 可能的字段名称列表
+     * @return 规则值，如果获取失败默认返回 true
+     */
     private static boolean getBooleanGameRule(MinecraftServer server, String... fieldNames) {
         for (String fieldName : fieldNames) {
             try {

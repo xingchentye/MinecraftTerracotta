@@ -27,22 +27,36 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
+/**
+ * 启动屏幕（Fabric）。
+ * 负责在初次启动时检查环境、下载依赖、启动后台服务进程。
+ */
 public class StartupScreen extends EnderBaseScreen {
     private static final Logger LOGGER = LoggerFactory.getLogger(StartupScreen.class);
+    /** 用于执行启动任务的单线程调度执行器 */
     private static final ScheduledExecutorService STARTUP_EXECUTOR = Executors.newSingleThreadScheduledExecutor(r -> {
         Thread thread = new Thread(r, "Ender-Startup");
         thread.setDaemon(true);
         return thread;
     });
 
+    /** 当前主要状态文本 */
     private String statusText = "初始化中...";
+    /** 当前次要状态文本 */
     private String subStatusText = "";
+    /** 启动进度 (0.0 - 1.0) */
     private double progress = 0.0;
+    /** 是否发生错误 */
     private boolean isError = false;
+    /** 是否完成启动 */
     private boolean isFinished = false;
+    /** 是否已开始启动序列 */
     private boolean isStarted = false;
+    /** 是否保持进程存活（调试用） */
     private boolean keepProcessAlive = false;
+    /** 是否为全新启动（非重连） */
     private boolean isFreshLaunch = false;
+    /** 启动完成后的回调 */
     private Runnable onStartupComplete;
 
     public StartupScreen(Screen parent) {
@@ -54,10 +68,19 @@ public class StartupScreen extends EnderBaseScreen {
         this.onStartupComplete = onStartupComplete;
     }
 
+    /**
+     * 设置启动完成后的回调。
+     *
+     * @param onStartupComplete 回调函数
+     */
     public void setOnStartupComplete(Runnable onStartupComplete) {
         this.onStartupComplete = onStartupComplete;
     }
 
+    /**
+     * 初始化内容。
+     * 添加取消按钮，并在未启动时触发启动序列。
+     */
     @Override
     protected void initContent() {
         this.layout.addFooter(ButtonWidget.builder(Text.literal("取消"), button -> {
@@ -69,6 +92,12 @@ public class StartupScreen extends EnderBaseScreen {
         }
     }
 
+    /**
+     * 开始启动序列。
+     * 检查是否存在动态端口（后台服务是否已在运行）。
+     * 如果已运行，尝试健康检查并连接。
+     * 否则，执行完整启动流程。
+     */
     private void startStartupSequence() {
         isStarted = true;
 
@@ -90,6 +119,10 @@ public class StartupScreen extends EnderBaseScreen {
         performFullStartup();
     }
 
+    /**
+     * 执行完整启动流程。
+     * 包括环境检测、架构判断、资源下载、进程启动等。
+     */
     private void performFullStartup() {
         isFreshLaunch = true;
         CompletableFuture.runAsync(() -> {
@@ -206,8 +239,8 @@ public class StartupScreen extends EnderBaseScreen {
     private void launchAndConnect(Path exePath, Path workDir) throws Exception {
         updateStatus("正在初始化...", 0.95);
 
-        // 确保 EnderCore 环境已准备就绪（文件已下载）
-        // 实际的 EasyTier 启动将在加入/创建房间时进行
+        
+        
 
         updateStatus("初始化完成", 1.0);
         
@@ -215,9 +248,9 @@ public class StartupScreen extends EnderBaseScreen {
         if (port == -1) {
             throw new RuntimeException("无法找到可用端口");
         }
-        EnderApiClient.setPort(port); // 标记服务就绪
+        EnderApiClient.setPort(port); 
 
-        // EnderApiClient.checkHealth().join();
+        
 
         delay(500).thenRun(() -> MinecraftClient.getInstance().execute(this::onStartupSuccess));
     }

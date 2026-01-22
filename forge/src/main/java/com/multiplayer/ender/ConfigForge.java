@@ -2,12 +2,19 @@ package com.multiplayer.ender;
 
 import net.minecraftforge.common.ForgeConfigSpec;
 
+/**
+ * Forge 模组配置类。
+ * 定义模组的配置项，包括核心文件路径、自动更新和自动启动等。
+ */
 public class ConfigForge {
     private static final ForgeConfigSpec.Builder BUILDER = new ForgeConfigSpec.Builder();
     private static final ForgeConfigSpec.Builder CLIENT_BUILDER = new ForgeConfigSpec.Builder();
 
+    /** 外部核心文件路径 */
     public static final ForgeConfigSpec.ConfigValue<String> EXTERNAL_ender_PATH;
+    /** 自动更新开关 */
     public static final ForgeConfigSpec.BooleanValue AUTO_UPDATE;
+    /** 自动启动后端开关 */
     public static final ForgeConfigSpec.BooleanValue AUTO_START_BACKEND;
 
     static {

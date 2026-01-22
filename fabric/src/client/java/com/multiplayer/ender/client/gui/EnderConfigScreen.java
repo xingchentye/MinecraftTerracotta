@@ -9,6 +9,10 @@ import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.text.Text;
 
+/**
+ * 末影联机设置屏幕（Fabric）。
+ * 提供对模组配置项的修改功能，如核心路径、自动更新和自动启动。
+ */
 public class EnderConfigScreen extends EnderBaseScreen {
     private String tempPath;
     private boolean tempAutoUpdate;
@@ -21,6 +25,10 @@ public class EnderConfigScreen extends EnderBaseScreen {
         this.tempAutoStart = FabricConfig.isAutoStartBackend();
     }
 
+    /**
+     * 初始化内容。
+     * 创建配置项的控件（文本框、按钮）。
+     */
     @Override
     protected void initContent() {
         DirectionalLayoutWidget content = DirectionalLayoutWidget.vertical().spacing(8);
@@ -65,6 +73,10 @@ public class EnderConfigScreen extends EnderBaseScreen {
         this.layout.addFooter(footerButtons);
     }
 
+    /**
+     * 保存配置。
+     * 将临时变量的值应用到 FabricConfig 并持久化保存。
+     */
     private void saveConfig() {
         FabricConfig.setExternalEnderPath(this.tempPath);
         FabricConfig.setAutoUpdate(this.tempAutoUpdate);

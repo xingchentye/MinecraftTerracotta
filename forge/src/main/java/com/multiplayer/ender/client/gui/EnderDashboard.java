@@ -36,6 +36,16 @@ import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.border.WorldBorder;
 import net.minecraft.client.gui.components.ObjectSelectionList;
 
+/**
+ * 末影联机控制台屏幕。
+ * <p>
+ * 这是 Mod 的核心 GUI 界面，提供以下功能：
+ * 1. 显示当前联机状态（连接中、已连接、空闲等）。
+ * 2. 房主功能：房间管理（权限、规则、世界设置）、踢人、关闭房间。
+ * 3. 访客功能：查看房间信息、断开连接。
+ * 4. 包含多个子页面（概览、权限、规则、世界、网络、后端）用于详细设置。
+ * </p>
+ */
 public class EnderDashboard extends EnderBaseScreen {
     private String backendState = Component.translatable("ender.dashboard.status.fetching").getString();
     private long lastStateCheck = 0;
@@ -56,6 +66,7 @@ public class EnderDashboard extends EnderBaseScreen {
     private int lastPingMs = -1;
     private int networkQualityColor = 0x00FF00;
     private String networkQualityLabel = "良好";
+    // 房间设置相关字段
     private String roomName = "未命名房间";
     private String roomRemark = "";
     private int currentPlayers = 0;
@@ -96,12 +107,23 @@ public class EnderDashboard extends EnderBaseScreen {
     private RoomPagePanel roomPagePanel;
     private PlayerListScrollWidget playerListWidget;
 
+    /**
+     * 视图模式枚举。
+     * 定义控制台的不同显示场景。
+     */
     public enum ViewMode {
+        /** 完整模式（主菜单进入） */
         FULL,
+        /** 游戏内信息模式（仅显示状态） */
         INGAME_INFO,
+        /** 游戏内设置模式（显示完整设置） */
         INGAME_SETTINGS
     }
 
+    /**
+     * 玩家列表包装组件。
+     * 将 ObjectSelectionList 包装为 AbstractWidget，以便在布局中使用。
+     */
     private class PlayerListWrapperWidget extends AbstractWidget {
         private final PlayerListScrollWidget list;
         
@@ -135,6 +157,10 @@ public class EnderDashboard extends EnderBaseScreen {
         protected void updateWidgetNarration(net.minecraft.client.gui.narration.NarrationElementOutput narrationElementOutput) {}
     }
 
+    /**
+     * 玩家列表滚动组件。
+     * 显示房间内的玩家列表，支持显示状态和移除操作。
+     */
     private class PlayerListScrollWidget extends ObjectSelectionList<PlayerListScrollWidget.Entry> {
         public PlayerListScrollWidget(net.minecraft.client.Minecraft minecraft, int width, int height, int top, int bottom) {
             super(minecraft, width, height, top, 24);
@@ -226,11 +252,11 @@ public class EnderDashboard extends EnderBaseScreen {
                  guiGraphics.drawString(EnderDashboard.this.font, displayName, x + 10, y + (entryHeight - 8) / 2, color);
                  guiGraphics.drawString(EnderDashboard.this.font, Component.literal(type).withStyle(net.minecraft.ChatFormatting.GRAY), x + 140, y + (entryHeight - 8) / 2, 0xFFFFFF);
                  
-                 int statusColor = 0x55FF55; // Green
+                 int statusColor = 0x55FF55; 
                  if ("[未连接]".equals(status)) {
-                     statusColor = 0xFF5555; // Red
+                     statusColor = 0xFF5555; 
                  } else if ("[连接中]".equals(status)) {
-                     statusColor = 0xFFFF55; // Yellow
+                     statusColor = 0xFFFF55; 
                  }
                  if (status != null) {
                     guiGraphics.drawString(EnderDashboard.this.font, Component.literal(status).withStyle(net.minecraft.ChatFormatting.GRAY), x + 200, y + (entryHeight - 8) / 2, statusColor);
@@ -258,12 +284,21 @@ public class EnderDashboard extends EnderBaseScreen {
         }
     }
 
+    /**
+     * 房间管理页面枚举。
+     */
     public enum RoomPage {
+        /** 概览：房间名、备注、在线人数 */
         OVERVIEW,
+        /** 权限：白名单、黑名单、访客权限 */
         PERMISSIONS,
+        /** 规则：作弊、PvP、死亡掉落等 */
         RULES,
+        /** 世界：出生点、世界边界、天气锁定 */
         WORLD,
+        /** 网络：自动重连、主机迁移 */
         NETWORK,
+        /** 后端：核心版本、资源限制 */
         BACKEND
     }
 
@@ -274,6 +309,12 @@ public class EnderDashboard extends EnderBaseScreen {
         this(parent, ViewMode.FULL);
     }
 
+    /**
+     * 构造函数。
+     *
+     * @param parent 父屏幕
+     * @param mode   视图模式
+     */
     public EnderDashboard(Screen parent, ViewMode mode) {
         super(Component.literal("末影联机中心"), parent);
         this.currentMode = mode;
@@ -282,6 +323,11 @@ public class EnderDashboard extends EnderBaseScreen {
         this.tempAutoStart = ConfigForge.AUTO_START_BACKEND.get();
     }
 
+    /**
+     * 设置连接状态。
+     *
+     * @param connected 是否已连接到后端
+     */
     public void setConnected(boolean connected) {
         wasConnected = connected;
     }
@@ -293,7 +339,7 @@ public class EnderDashboard extends EnderBaseScreen {
             if (clipboard != null) {
                 clipboard = clipboard.trim();
                 if (!clipboard.isEmpty() && !clipboard.equals(lastClipboard)) {
-                    // Match standard 4-part room code: U/XXXX-XXXX-XXXX-XXXX
+                    
                     if (clipboard.matches("^U/[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$")) {
                         lastClipboard = clipboard;
                         String finalClipboard = clipboard;
@@ -309,14 +355,14 @@ public class EnderDashboard extends EnderBaseScreen {
 
     @Override
     protected void initContent() {
-        // Fix: Sync static UI state with actual backend state on init
+        
         EnderApiClient.State realState = EnderApiClient.getCurrentState();
         if (realState == EnderApiClient.State.IDLE) {
             wasConnected = false;
             lastStateJson = null;
         } else if (realState == EnderApiClient.State.HOSTING || realState == EnderApiClient.State.JOINING) {
             wasConnected = true;
-            // If the cached JSON contradicts the real state, clear it to force a refresh
+            
             if (lastStateJson != null && lastStateJson.has("state")) {
                 String cachedState = lastStateJson.get("state").getAsString();
                 boolean cachedIsHost = "host-ok".equals(cachedState);
@@ -353,6 +399,10 @@ public class EnderDashboard extends EnderBaseScreen {
         }
     }
 
+    /**
+     * 立即检查后端状态。
+     * 异步获取状态 JSON，解析并更新 UI 状态。
+     */
     private void checkStateImmediately() {
         if (!EnderApiClient.hasDynamicPort()) return;
 
@@ -385,6 +435,12 @@ public class EnderDashboard extends EnderBaseScreen {
         });
     }
 
+    /**
+     * 根据状态 JSON 更新 UI。
+     * 通常由外部事件或轮询触发。
+     *
+     * @param json 状态 JSON 对象
+     */
     public void updateFromState(JsonObject json) {
         if (json == null) return;
         lastStateJson = json;
@@ -444,7 +500,7 @@ public class EnderDashboard extends EnderBaseScreen {
     }
 
     private void initGuestConnectedContent() {
-        // Footer
+        
         LinearLayout footerLayout = LinearLayout.horizontal().spacing(10);
         
         footerLayout.addChild(Button.builder(Component.literal("断开连接"), b -> {
@@ -459,7 +515,7 @@ public class EnderDashboard extends EnderBaseScreen {
         
         this.layout.addToFooter(footerLayout);
 
-        // Manual Body Layout
+        
         int headerHeight = this.layout.getHeaderHeight() + 10;
         int footerHeight = this.layout.getFooterHeight() + 10;
         
@@ -611,6 +667,13 @@ public class EnderDashboard extends EnderBaseScreen {
         }
     }
 
+    /**
+     * 更新后端状态显示。
+     * 解析状态 JSON，更新连接状态、网络质量、玩家列表等。
+     *
+     * @param stateJson 状态 JSON 字符串
+     * @param startedAt 请求开始时间（用于计算延迟）
+     */
     private void updateBackendState(String stateJson, long startedAt) {
         if (stateJson != null) {
              try {
@@ -736,6 +799,13 @@ public class EnderDashboard extends EnderBaseScreen {
         }
     }
 
+    /**
+     * 合并房间管理状态。
+     * 将后端返回的 JSON 数据合并到本地字段中，仅当字段值变化时返回 true。
+     *
+     * @param json 后端返回的状态 JSON
+     * @return 如果有任何字段发生变化，返回 true
+     */
     private boolean mergeRoomManagementState(JsonObject json) {
         boolean changed = false;
         if (json.has("room_name")) {
@@ -882,6 +952,12 @@ public class EnderDashboard extends EnderBaseScreen {
         return changed;
     }
 
+    /**
+     * 构建房间管理状态 JSON。
+     * 将本地字段序列化为 JSON 对象，用于同步到后端。
+     *
+     * @return 状态 JSON 对象
+     */
     private JsonObject buildRoomManagementStateJson() {
         JsonObject json = new JsonObject();
         json.addProperty("room_name", roomName);
@@ -918,8 +994,12 @@ public class EnderDashboard extends EnderBaseScreen {
         return json;
     }
 
+    /**
+     * 初始化房间管理内容。
+     * 创建左侧菜单和右侧内容面板，根据当前页面类型显示不同设置。
+     */
     private void initRoomManagementContent() {
-        // Ensure roomRemark is synced from state before rendering
+        
         if (roomRemark == null || roomRemark.isEmpty()) {
             JsonObject state = EnderApiClient.getRoomManagementStateSync();
             if (state != null && state.has("room_remark")) {
@@ -928,10 +1008,10 @@ public class EnderDashboard extends EnderBaseScreen {
         }
 
         int menuWidth = 120;
-        int spacing = 30; // Increased spacing
+        int spacing = 30; 
         int contentX = menuWidth + spacing;
-        int contentWidth = this.width - contentX - 10; // Right margin 10
-
+        int contentWidth = this.width - contentX - 10; 
+        
         LinearLayout menu = LinearLayout.vertical().spacing(6);
         menu.defaultCellSetting().alignHorizontallyLeft();
         roomPageButtons.clear();
@@ -940,20 +1020,20 @@ public class EnderDashboard extends EnderBaseScreen {
         }
         updateRoomPageMenuButtons();
         
-        // Manually position menu
+        
         menu.arrangeElements();
-        menu.setPosition(10, this.layout.getHeaderHeight() + 10); // Left margin 10
-
+        menu.setPosition(10, this.layout.getHeaderHeight() + 10); 
+        
         this.roomPagePanel = new RoomPagePanel(contentWidth, this.height - this.layout.getHeaderHeight() - this.layout.getFooterHeight() - 20);
         this.roomPagePanel.setPosition(contentX, this.layout.getHeaderHeight() + 10);
         
         rebuildRoomPageContent(false);
         
-        // We do NOT add these to layout.contentsFrame because we want manual positioning
-        // But we need to register widgets.
-        // For menu buttons:
+        
+        
+        
         menu.visitWidgets(this::addRenderableWidget);
-        // For panel content: done in rebuildRoomPageContent
+        
     }
 
     private void addRoomPageMenuButton(LinearLayout menu, RoomPage page, int width) {
@@ -982,15 +1062,15 @@ public class EnderDashboard extends EnderBaseScreen {
         if (roomPagePanel == null) {
             return;
         }
-        // Always remove old widgets from screen, regardless of registerWidgets flag
-        // This is critical to prevent UI overlap when switching pages
+        
+        
         for (AbstractWidget widget : roomPageWidgets) {
             this.removeWidget(widget);
         }
         
         roomPageWidgets.clear();
         LinearLayout pageContent = LinearLayout.vertical().spacing(12);
-        pageContent.defaultCellSetting().alignHorizontallyCenter(); // Or align left depending on design
+        pageContent.defaultCellSetting().alignHorizontallyCenter(); 
         switch (currentRoomPage) {
             case OVERVIEW -> addOverviewPage(pageContent);
             case PERMISSIONS -> addPermissionsPage(pageContent);
@@ -1001,7 +1081,7 @@ public class EnderDashboard extends EnderBaseScreen {
         }
         roomPagePanel.setContent(pageContent);
         
-        // Manually arrange the new content to ensure positions are correct immediately
+        
         roomPagePanel.arrangeElements();
         
         pageContent.visitWidgets(widget -> {
@@ -1011,24 +1091,24 @@ public class EnderDashboard extends EnderBaseScreen {
             }
         });
         
-        // If we are in the initial init phase (registerWidgets=false), the widgets will be added later by the caller 
-        // (but wait, visitWidgets above only adds if registerWidgets is true).
-        // Actually, in initRoomManagementContent, we need to add them.
-        // Let's fix the logic:
-        // If registerWidgets is false, we just collect them into roomPageWidgets? 
-        // No, in initRoomManagementContent we didn't call addRenderableWidget for panel content.
-        // We should probably always add them here if the screen is initialized.
-        // But initRoomManagementContent is called during init().
-        // If called from init(), we should add them to this.renderables (via addRenderableWidget).
+        
+        
+        
+        
+        
+        
+        
+        
+        
         
         if (!registerWidgets) {
-             // If called from init(), we must add them now because we are NOT adding roomPagePanel to layout
+             
              for (AbstractWidget widget : roomPageWidgets) {
                  this.addRenderableWidget(widget);
              }
         }
         
-        // No need to call repositionElements() for the whole screen if we just updated this panel
+        
     }
 
     private String getRoomPageTitle(RoomPage page) {
@@ -1070,7 +1150,7 @@ public class EnderDashboard extends EnderBaseScreen {
                 layout.arrangeElements();
             }
             if (content != null) {
-                // Center the content horizontally within this panel
+                
                 int contentW = content.getWidth();
                 int offset = (this.fixedWidth - contentW) / 2;
                 content.setPosition(this.getX() + offset, this.getY());
@@ -1107,12 +1187,12 @@ public class EnderDashboard extends EnderBaseScreen {
         remarkBox.setHint(Component.literal("房间描述 (MOTD)"));
         remarkBox.setResponder(val -> {
             roomRemark = val;
-            // Don't set dirty immediately on typing, use save button
+            
         });
         remarkBox.setEditable(isHostConnected());
         remarkLayout.addChild(remarkBox);
         Button saveBtn = Button.builder(Component.literal("保存"), b -> {
-            // Apply the current value from the box to roomRemark before saving
+            
             roomRemark = remarkBox.getValue();
             roomStateDirty = true;
             ClientSetupForge.showToast(Component.literal("提示"), Component.literal("房间描述已保存"));
@@ -1282,7 +1362,7 @@ public class EnderDashboard extends EnderBaseScreen {
         LinearLayout world = LinearLayout.vertical().spacing(6);
         world.defaultCellSetting().alignHorizontallyCenter();
 
-        // Auto-fill coordinates from player position
+        
         int fillX = respawnX;
         int fillY = respawnY;
         int fillZ = respawnZ;
@@ -1465,7 +1545,7 @@ public class EnderDashboard extends EnderBaseScreen {
             return;
         }
         
-        // Sync MOTD
+        
         if (this.roomRemark != null) {
             try {
                 server.setMotd(this.roomRemark);

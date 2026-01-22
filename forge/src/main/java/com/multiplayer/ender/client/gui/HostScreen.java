@@ -11,6 +11,10 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.NotNull;
 
+/**
+ * 创建房间屏幕。
+ * 允许玩家作为房主创建并主持联机游戏。
+ */
 public class HostScreen extends EnderBaseScreen {
     private Component statusText = Component.translatable("ender.host.status.ready");
     private String roomCode = "";
@@ -25,6 +29,10 @@ public class HostScreen extends EnderBaseScreen {
         super(Component.translatable("ender.host.title"), parent);
     }
 
+    /**
+     * 初始化内容。
+     * 创建开始托管按钮和取消按钮。
+     */
     @Override
     protected void initContent() {
         LinearLayout contentLayout = LinearLayout.vertical().spacing(12);
@@ -41,6 +49,10 @@ public class HostScreen extends EnderBaseScreen {
         this.layout.addToContents(contentLayout);
     }
 
+    /**
+     * 开始托管游戏。
+     * 获取单人游戏端口，向后台发送创建房间请求。
+     */
     private void startHosting() {
         long now = System.currentTimeMillis();
         if (now - lastClickTime < 300) return;
@@ -68,6 +80,10 @@ public class HostScreen extends EnderBaseScreen {
         });
     }
 
+    /**
+     * 每刻更新。
+     * 轮询后台状态以检查房间是否创建成功。
+     */
     @Override
     public void tick() {
         super.tick();
@@ -80,6 +96,10 @@ public class HostScreen extends EnderBaseScreen {
         }
     }
 
+    /**
+     * 检查托管状态。
+     * 解析后台返回的状态 JSON，如果状态为 host-ok，则认为创建成功并关闭屏幕。
+     */
     private void checkHostStatus() {
         EnderApiClient.getState().thenAccept(stateJson -> {
             if (stateJson == null) return;

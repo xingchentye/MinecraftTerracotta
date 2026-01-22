@@ -14,17 +14,38 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.NotNull;
 
+/**
+ * 房间信息界面。
+ * 显示当前房间的状态、房间号和在线成员。
+ *
+ * @author Ender Developer
+ * @version 1.0
+ * @since 1.0
+ */
 public class RoomInfoScreen extends EnderBaseScreen {
     private static final Gson GSON = new Gson();
+    /** 上次检查状态的时间戳 */
     private long lastStateCheck = 0;
+    /** 后端状态显示文本 */
     private String backendState = Component.translatable("ender.dashboard.status.fetching").getString();
+    /** 上次获取的原始状态 JSON 字符串 */
     private String lastStateRaw = null;
+    /** 上次解析的状态对象 */
     private JsonObject lastStateJson = null;
 
+    /**
+     * 构造函数。
+     *
+     * @param parent 父屏幕
+     */
     public RoomInfoScreen(Screen parent) {
         super(Component.literal("房间信息"), parent);
     }
 
+    /**
+     * 初始化界面内容。
+     * 显示状态、房间号、成员统计以及操作按钮。
+     */
     @Override
     protected void initContent() {
         LinearLayout content = LinearLayout.vertical().spacing(8);
@@ -62,6 +83,10 @@ public class RoomInfoScreen extends EnderBaseScreen {
         checkStateImmediately();
     }
 
+    /**
+     * 每帧更新。
+     * 定期检查后端状态。
+     */
     @Override
     public void tick() {
         super.tick();
@@ -84,6 +109,10 @@ public class RoomInfoScreen extends EnderBaseScreen {
         super.render(guiGraphics, mouseX, mouseY, partialTick);
     }
 
+    /**
+     * 立即检查状态。
+     * 如果有动态端口，则获取最新状态。
+     */
     private void checkStateImmediately() {
         if (!EnderApiClient.hasDynamicPort()) {
             return;
@@ -98,6 +127,12 @@ public class RoomInfoScreen extends EnderBaseScreen {
         });
     }
 
+    /**
+     * 更新后端状态显示。
+     * 解析 JSON 状态并更新 UI 文本。
+     *
+     * @param stateJson 状态 JSON 字符串
+     */
     private void updateBackendState(String stateJson) {
         if (stateJson == null || stateJson.equals(this.lastStateRaw)) {
             return;
@@ -137,6 +172,12 @@ public class RoomInfoScreen extends EnderBaseScreen {
         }
     }
 
+    /**
+     * 从状态 JSON 中提取成员列表。
+     *
+     * @param json 状态 JSON 对象
+     * @return 成员名称列表
+     */
     private java.util.List<String> extractMembers(JsonObject json) {
         java.util.List<String> members = new java.util.ArrayList<>();
         if (json == null) {

@@ -26,6 +26,10 @@ import org.slf4j.LoggerFactory;
 import java.util.HashSet;
 import java.util.Set;
 
+/**
+ * Fabric 客户端模组初始化类。
+ * 处理客户端侧的初始化逻辑，如事件注册、配置加载等。
+ */
 public class MinecraftEnderClient implements ClientModInitializer {
     private static final Logger LOGGER = LoggerFactory.getLogger("ender_online-fabric");
     private static final Gson GSON = new Gson();
@@ -37,6 +41,10 @@ public class MinecraftEnderClient implements ClientModInitializer {
     private static String lastStateValue = "";
     private static Set<String> lastMemberNames = new HashSet<>();
 
+    /**
+     * 简单的 Toast 通知实现类。
+     * 用于在 Fabric 客户端显示浮动通知。
+     */
     private static class SimpleToast implements Toast {
         private final Text title;
         private final Text message;
@@ -80,11 +88,24 @@ public class MinecraftEnderClient implements ClientModInitializer {
         }
     }
 
+    /**
+     * 显示 Toast 通知。
+     *
+     * @param title 标题
+     * @param message 内容
+     */
     public static void showToast(Text title, Text message) {
         MinecraftClient client = MinecraftClient.getInstance();
         client.getToastManager().add(new SimpleToast(title, message));
     }
 
+    /**
+     * 计算 Toast 宽度。
+     *
+     * @param title 标题
+     * @param message 内容
+     * @return 宽度
+     */
     private static int calculateToastWidth(Text title, Text message) {
         MinecraftClient client = MinecraftClient.getInstance();
         if (client == null || client.textRenderer == null) {

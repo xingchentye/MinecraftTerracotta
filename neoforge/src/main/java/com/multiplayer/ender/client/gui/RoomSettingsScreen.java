@@ -12,17 +12,34 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.Difficulty;
 import org.jetbrains.annotations.NotNull;
 
+/**
+ * 房间设置界面。
+ * 用于配置游戏规则、PVP、难度以及核心设置。
+ *
+ * @author Ender Developer
+ * @version 1.0
+ * @since 1.0
+ */
 public class RoomSettingsScreen extends Screen {
     private final Screen parent;
     private String tempPath = "";
     private boolean tempAutoUpdate = false;
     private boolean tempAutoStart = false;
 
+    /**
+     * 构造函数。
+     *
+     * @param parent 父屏幕
+     */
     public RoomSettingsScreen(Screen parent) {
         super(Component.literal("房间设置"));
         this.parent = parent;
     }
 
+    /**
+     * 初始化界面。
+     * 创建设置按钮和游戏规则配置项。
+     */
     @Override
     protected void init() {
         tempPath = Config.EXTERNAL_ender_PATH.get();
@@ -93,7 +110,7 @@ public class RoomSettingsScreen extends Screen {
         }).bounds(centerX + 2, currentY, 88, 20).build();
         this.addRenderableWidget(backBtn);
     }
-
+    
     @Override
     public void render(@NotNull GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         super.render(guiGraphics, mouseX, mouseY, partialTick);

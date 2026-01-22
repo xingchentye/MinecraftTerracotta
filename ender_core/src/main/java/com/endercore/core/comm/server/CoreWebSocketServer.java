@@ -25,8 +25,14 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
+ 
 /**
- * Core WebSocket 服务端：接收 ECWS/1 Request 并分发到注册的处理器。
+ * 核心 WebSocket 服务器实现。
+ * 负责处理 WebSocket 连接、请求分发、事件广播以及连接管理。
+ *
+ * @author Ender Developer
+ * @version 1.0
+ * @since 1.0
  */
 public final class CoreWebSocketServer extends WebSocketServer {
     private final CoreFrameCodec codec;
@@ -39,6 +45,13 @@ public final class CoreWebSocketServer extends WebSocketServer {
     private final ConnectionMetrics metrics = new ConnectionMetrics();
     private final AtomicLong connections = new AtomicLong();
 
+    /**
+     * 构造函数。
+     *
+     * @param address 绑定地址
+     * @param maxFrameBytes 最大帧大小（字节）
+     * @param handlerExecutor 处理器执行器，如果为 null 则使用 CachedThreadPool
+     */
     public CoreWebSocketServer(InetSocketAddress address, int maxFrameBytes, Executor handlerExecutor) {
         super(address);
         this.codec = new CoreFrameCodec(maxFrameBytes);
@@ -48,8 +61,8 @@ public final class CoreWebSocketServer extends WebSocketServer {
     /**
      * 注册请求处理器。
      *
-     * @param kind    namespace:path
-     * @param handler 处理器
+     * @param kind 请求类型
+     * @param handler 请求处理器
      */
     public void register(String kind, CoreRequestHandler handler) {
         CoreKinds.validate(kind);
@@ -57,10 +70,10 @@ public final class CoreWebSocketServer extends WebSocketServer {
     }
 
     /**
-     * 注册事件处理器（处理客户端发来的单向事件）。
+     * 注册事件处理器。
      *
-     * @param kind    namespace:path
-     * @param handler 处理器
+     * @param kind 事件类型
+     * @param handler 事件处理器
      */
     public void registerEvent(String kind, CoreEventHandler handler) {
         CoreKinds.validate(kind);
@@ -68,10 +81,10 @@ public final class CoreWebSocketServer extends WebSocketServer {
     }
 
     /**
-     * 广播单向事件给所有连接的客户端。
+     * 广播事件给所有连接的客户端。
      *
-     * @param kind    namespace:path
-     * @param payload 负载
+     * @param kind 事件类型
+     * @param payload 事件负载
      */
     public void broadcastEvent(String kind, byte[] payload) {
         CoreKinds.validate(kind);
@@ -79,6 +92,14 @@ public final class CoreWebSocketServer extends WebSocketServer {
         broadcast(bytes);
     }
 
+    /**
+     * 发送事件到指定客户端。
+     *
+     * @param remoteAddress 远程地址
+     * @param kind 事件类型
+     * @param payload 事件负载
+     * @return 如果发送成功返回 true，否则返回 false（例如客户端未连接）
+     */
     public boolean sendEventTo(InetSocketAddress remoteAddress, String kind, byte[] payload) {
         Objects.requireNonNull(remoteAddress, "remoteAddress");
         CoreKinds.validate(kind);
@@ -92,6 +113,13 @@ public final class CoreWebSocketServer extends WebSocketServer {
         return true;
     }
 
+    /**
+     * 发送事件到多个客户端。
+     *
+     * @param remoteAddresses 远程地址集合
+     * @param kind 事件类型
+     * @param payload 事件负载
+     */
     public void sendEventToMany(Iterable<InetSocketAddress> remoteAddresses, String kind, byte[] payload) {
         Objects.requireNonNull(remoteAddresses, "remoteAddresses");
         CoreKinds.validate(kind);
@@ -106,13 +134,21 @@ public final class CoreWebSocketServer extends WebSocketServer {
         }
     }
 
+    /**
+     * 注册连接关闭监听器。
+     *
+     * @param listener 监听器
+     */
     public void onConnectionClosed(Consumer<InetSocketAddress> listener) {
         closeListeners.add(Objects.requireNonNull(listener, "listener"));
     }
 
     @Override
     /**
-     * 连接建立回调。
+     * 当 WebSocket 连接打开时调用。
+     *
+     * @param conn WebSocket 连接
+     * @param handshake 握手信息
      */
     public void onOpen(WebSocket conn, ClientHandshake handshake) {
         connections.incrementAndGet();
@@ -124,7 +160,12 @@ public final class CoreWebSocketServer extends WebSocketServer {
 
     @Override
     /**
-     * 连接关闭回调。
+     * 当 WebSocket 连接关闭时调用。
+     *
+     * @param conn WebSocket 连接
+     * @param code 关闭代码
+     * @param reason 关闭原因
+     * @param remote 是否由远程关闭
      */
     public void onClose(WebSocket conn, int code, String reason, boolean remote) {
         connections.decrementAndGet();
@@ -142,7 +183,10 @@ public final class CoreWebSocketServer extends WebSocketServer {
 
     @Override
     /**
-     * 收到二进制帧回调：解析协议并分发请求。
+     * 当接收到二进制消息时调用。
+     *
+     * @param conn WebSocket 连接
+     * @param message 二进制消息
      */
     public void onMessage(WebSocket conn, ByteBuffer message) {
         metrics.onFrameReceived(message.remaining());
@@ -168,7 +212,11 @@ public final class CoreWebSocketServer extends WebSocketServer {
 
     @Override
     /**
-     * 收到文本帧回调：按协议错误处理。
+     * 当接收到文本消息时调用。
+     * 本服务器不支持文本帧。
+     *
+     * @param conn WebSocket 连接
+     * @param message 文本消息
      */
     public void onMessage(WebSocket conn, String message) {
         conn.close(1003, "不支持文本帧");
@@ -176,21 +224,24 @@ public final class CoreWebSocketServer extends WebSocketServer {
 
     @Override
     /**
-     * WebSocket 底层错误回调。
+     * 当发生错误时调用。
+     *
+     * @param conn WebSocket 连接
+     * @param ex 异常对象
      */
     public void onError(WebSocket conn, Exception ex) {
     }
 
     @Override
     /**
-     * 服务端启动完成回调。
+     * 当服务器启动时调用。
      */
     public void onStart() {
         started.complete(null);
     }
 
     /**
-     * 等待服务端启动完成（监听端口绑定成功）。
+     * 等待服务器启动完成。
      *
      * @param timeout 超时时间
      */
@@ -203,7 +254,10 @@ public final class CoreWebSocketServer extends WebSocketServer {
     }
 
     /**
-     * 处理请求帧：路由到 handler 并将结果回包。
+     * 处理请求帧。
+     *
+     * @param conn WebSocket 连接
+     * @param frame 请求帧
      */
     private void handleRequest(WebSocket conn, CoreFrame frame) {
         CoreKinds.validate(frame.kind());
@@ -234,6 +288,9 @@ public final class CoreWebSocketServer extends WebSocketServer {
 
     /**
      * 发送响应帧。
+     *
+     * @param conn WebSocket 连接
+     * @param response 响应对象
      */
     private void sendResponse(WebSocket conn, CoreResponse response) {
         byte[] bytes = codec.encode(new CoreFrame(
@@ -249,7 +306,10 @@ public final class CoreWebSocketServer extends WebSocketServer {
     }
 
     /**
-     * 处理事件帧：路由到事件处理器，不回包。
+     * 处理事件帧。
+     *
+     * @param conn WebSocket 连接
+     * @param frame 事件帧
      */
     private void handleEvent(WebSocket conn, CoreFrame frame) {
         CoreKinds.validate(frame.kind());
@@ -267,7 +327,10 @@ public final class CoreWebSocketServer extends WebSocketServer {
     }
 
     /**
-     * 处理心跳帧：回发心跳响应以便对端观测链路状态。
+     * 处理心跳帧。
+     *
+     * @param conn WebSocket 连接
+     * @param frame 心跳帧
      */
     private void handleHeartbeat(WebSocket conn, CoreFrame frame) {
         byte[] bytes = codec.encode(new CoreFrame(CoreMessageType.HEARTBEAT, (byte) 0, 0, frame.requestId(), "", new byte[0]));
@@ -276,7 +339,9 @@ public final class CoreWebSocketServer extends WebSocketServer {
     }
 
     /**
-     * 获取当前服务端指标快照。
+     * 获取连接指标快照。
+     *
+     * @return 连接指标快照
      */
     public ConnectionMetricsSnapshot metrics() {
         return metrics.snapshot(0);
@@ -284,6 +349,8 @@ public final class CoreWebSocketServer extends WebSocketServer {
 
     /**
      * 获取当前连接数。
+     *
+     * @return 当前连接数
      */
     public long connections() {
         return connections.get();

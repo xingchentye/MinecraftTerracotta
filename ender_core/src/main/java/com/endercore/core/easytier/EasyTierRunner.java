@@ -20,47 +20,130 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.Map;
 import java.util.HashMap;
 
+/**
+ * EasyTier 进程运行器。
+ * 负责启动 EasyTier 进程、监控其输出、解析对等节点信息以及管理进程生命周期。
+ *
+ * @author Ender Developer
+ * @version 1.0
+ * @since 1.0
+ */
 public class EasyTierRunner {
+    /**
+     * 日志记录器
+     */
     private static final Logger LOGGER = LoggerFactory.getLogger(EasyTierRunner.class);
+    
+    /**
+     * 可执行文件路径
+     */
     private final Path executablePath;
+    
+    /**
+     * 进程引用
+     */
     private final AtomicReference<Process> processRef = new AtomicReference<>();
+    
+    /**
+     * 运行状态标志
+     */
     private volatile boolean isRunning = false;
+    
+    /**
+     * 对等节点主机名映射表
+     */
     private final Map<String, String> peerHostnames = new ConcurrentHashMap<>();
+    
+    /**
+     * 对等节点IP映射表
+     */
     private final Map<String, String> peerIps = new ConcurrentHashMap<>();
+    
+    /**
+     * 轮询调度器
+     */
     private ScheduledExecutorService pollerScheduler;
-    private int rpcPort = 11010; // Will be updated from args
+    
+    /**
+     * RPC 端口
+     */
+    private int rpcPort = 11010; 
 
+    /**
+     * 构造函数。
+     *
+     * @param executablePath EasyTier 可执行文件路径
+     */
     public EasyTierRunner(Path executablePath) {
         this.executablePath = executablePath;
     }
 
+    /**
+     * 启动 EasyTier 进程。
+     *
+     * @param args 启动参数
+     * @throws IOException 当启动失败时抛出
+     */
     public void start(String... args) throws IOException {
         start(args, null);
     }
 
+    /**
+     * 活跃对等节点列表
+     */
     private final List<String> peerList = Collections.synchronizedList(new ArrayList<>());
+    
+    /**
+     * 忽略的对等节点列表（基础设施节点）
+     */
     private final List<String> ignoredPeers = Collections.synchronizedList(new ArrayList<>());
+    
+    /**
+     * 基础设施 URL 列表
+     */
     private final List<String> infrastructureUrls = Collections.synchronizedList(new ArrayList<>());
 
+    /**
+     * 获取活跃对等节点列表。
+     *
+     * @return 对等节点 ID 列表
+     */
     public List<String> getPeers() {
         return new ArrayList<>(peerList);
     }
 
+    /**
+     * 获取对等节点主机名映射。
+     *
+     * @return 主机名映射表副本
+     */
     public Map<String, String> getPeerHostnames() {
         return new HashMap<>(peerHostnames);
     }
 
+    /**
+     * 获取对等节点 IP 映射。
+     *
+     * @return IP 映射表副本
+     */
     public Map<String, String> getPeerIps() {
         return new HashMap<>(peerIps);
     }
 
+    /**
+     * 启动 EasyTier 进程（带环境变量）。
+     *
+     * @param args 启动参数
+     * @param env 环境变量
+     * @throws IOException 当启动失败时抛出
+     */
     public void start(String[] args, Map<String, String> env) throws IOException {
         if (isRunning()) {
             LOGGER.warn("EasyTier is already running.");
             return;
         }
 
-        peerList.clear(); // Clear peers on restart
+        peerList.clear(); 
         ignoredPeers.clear();
         infrastructureUrls.clear();
         peerHostnames.clear();
@@ -70,7 +153,7 @@ public class EasyTierRunner {
         command.add(executablePath.toAbsolutePath().toString());
         Collections.addAll(command, args);
 
-        // Parse args to find initial peers to ignore (public nodes) and RPC port
+        
         for (int i = 0; i < args.length; i++) {
             if ("-p".equals(args[i]) || "--peers".equals(args[i])) {
                 if (i + 1 < args.length) {
@@ -78,12 +161,12 @@ public class EasyTierRunner {
                 }
             }
             if ("--rpc-portal".equals(args[i]) && i + 1 < args.length) {
-                String val = args[i+1]; // 127.0.0.1:58252
+                String val = args[i+1]; 
                 if (val.contains(":")) {
                     try {
                         rpcPort = Integer.parseInt(val.split(":")[1]);
                     } catch (NumberFormatException e) {
-                        // ignore
+                        
                     }
                 }
             }
@@ -104,21 +187,21 @@ public class EasyTierRunner {
 
         startPeerPoller();
 
-        // Output handler
+        
         new Thread(() -> {
             try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
                 String line;
                 while ((line = reader.readLine()) != null) {
                     LOGGER.info("[EasyTier] {}", line);
                     
-                    // Identify ignored peers from connection info
-                    // Log: new peer connection added. ... dst_peer_id: 12345, ... remote_addr: Some(Url { url: "tcp://public..." })
+                    
+                    
                     if (line.contains("new peer connection added")) {
                         try {
                             String dstPeerId = null;
                             String remoteUrl = null;
                             
-                            // Extract dst_peer_id
+                            
                             int idIdx = line.indexOf("dst_peer_id: ");
                             if (idIdx != -1) {
                                 int end = line.indexOf(",", idIdx);
@@ -127,7 +210,7 @@ public class EasyTierRunner {
                                 }
                             }
                             
-                            // Extract remote_addr url
+                            
                             int urlIdx = line.indexOf("url: \"");
                             if (urlIdx != -1) {
                                 int end = line.indexOf("\"", urlIdx + 6);
@@ -137,17 +220,17 @@ public class EasyTierRunner {
                             }
                             
                             if (dstPeerId != null && remoteUrl != null) {
-                                // Check if this is a public node
+                                
                                 boolean isInfrastructure = false;
                                 for (String infraUrl : infrastructureUrls) {
-                                    // Simple contains check, can be improved if needed
-                                    // Remove protocol if needed, but contains usually works if arg was "tcp://..."
-                                    // The log usually has full URL
+                                    
+                                    
+                                    
                                     if (remoteUrl.contains(infraUrl) || infraUrl.contains(remoteUrl)) {
                                         isInfrastructure = true;
                                         break;
                                     }
-                                    // Also check for known public domains just in case args were missed or different
+                                    
                                     if (remoteUrl.contains("public.easytier.top") || 
                                         remoteUrl.contains("public2.easytier.cn")) {
                                         isInfrastructure = true;
@@ -158,7 +241,7 @@ public class EasyTierRunner {
                                 if (isInfrastructure) {
                                     if (!ignoredPeers.contains(dstPeerId)) {
                                         ignoredPeers.add(dstPeerId);
-                                        // Also remove from peerList if it was already added
+                                        
                                         peerList.remove(dstPeerId);
                                     }
                                 }
@@ -168,9 +251,9 @@ public class EasyTierRunner {
                         }
                     }
 
-                    // Parse peer info
+                    
                     if (line.contains("new peer added")) {
-                         // Example log: [EasyTier] ... new peer added. peer_id: 1418985250
+                         
                          try {
                              String[] parts = line.split("peer_id:");
                              if (parts.length > 1) {
@@ -186,13 +269,13 @@ public class EasyTierRunner {
                          }
                     }
                     if (line.contains("peer connection closed") || line.contains("remove peer")) {
-                        // Example log: ... remove peer ... peer_id: 12345
+                        
                          try {
                              String[] parts = line.split("peer_id:");
                              if (parts.length > 1) {
                                  String peerId = parts[1].trim();
                                  peerList.remove(peerId);
-                                 ignoredPeers.remove(peerId); // Clean up ignore list
+                                 ignoredPeers.remove(peerId); 
                              }
                          } catch (Exception e) {
                              LOGGER.warn("Failed to parse peer id for removal from line: {}", line);
@@ -200,7 +283,7 @@ public class EasyTierRunner {
                     }
                 }
             } catch (IOException e) {
-                // Ignore stream closed
+                
             } finally {
                 isRunning = false;
                 LOGGER.info("EasyTier process exited.");
@@ -208,12 +291,15 @@ public class EasyTierRunner {
         }, "EasyTier-Output").start();
     }
 
+    /**
+     * 停止 EasyTier 进程。
+     */
     public void stop() {
         Process process = processRef.get();
         if (process != null && process.isAlive()) {
             LOGGER.info("Stopping EasyTier...");
             stopPeerPoller();
-            process.destroy(); // Try graceful first
+            process.destroy(); 
             try {
                 Thread.sleep(1000);
                 if (process.isAlive()) {
@@ -226,11 +312,19 @@ public class EasyTierRunner {
         isRunning = false;
     }
 
+    /**
+     * 检查 EasyTier 是否正在运行。
+     *
+     * @return 如果正在运行则返回 true，否则返回 false
+     */
     public boolean isRunning() {
         Process process = processRef.get();
         return process != null && process.isAlive();
     }
 
+    /**
+     * 启动对等节点信息轮询器。
+     */
     private void startPeerPoller() {
         if (pollerScheduler != null && !pollerScheduler.isShutdown()) {
             return;
@@ -243,6 +337,9 @@ public class EasyTierRunner {
         pollerScheduler.scheduleWithFixedDelay(this::fetchPeerInfo, 2, 2, TimeUnit.SECONDS);
     }
 
+    /**
+     * 停止对等节点信息轮询器。
+     */
     private void stopPeerPoller() {
         if (pollerScheduler != null) {
             pollerScheduler.shutdownNow();
@@ -250,11 +347,14 @@ public class EasyTierRunner {
         }
     }
 
+    /**
+     * 通过 EasyTier CLI 获取对等节点详细信息（主机名、IP等）。
+     */
     private void fetchPeerInfo() {
         if (!isRunning) return;
         
         try {
-            // Determine CLI path
+            
             Path cliPath;
             boolean isWindows = System.getProperty("os.name").toLowerCase().contains("win");
             if (isWindows) {
@@ -320,7 +420,7 @@ public class EasyTierRunner {
             peerIps.putAll(latestIps);
             p.waitFor(5, TimeUnit.SECONDS);
         } catch (Exception e) {
-            // Ignore
+            
         }
     }
 }

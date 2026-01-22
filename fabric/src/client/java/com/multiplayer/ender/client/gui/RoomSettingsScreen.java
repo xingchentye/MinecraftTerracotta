@@ -12,6 +12,10 @@ import net.minecraft.text.Text;
 import net.minecraft.world.Difficulty;
 import org.jetbrains.annotations.NotNull;
 
+/**
+ * 房间设置屏幕（Fabric）。
+ * 允许玩家配置房间属性（如难度、PVP）以及模组的全局设置。
+ */
 public class RoomSettingsScreen extends Screen {
     private final Screen parent;
     private String tempPath = "";
@@ -23,6 +27,11 @@ public class RoomSettingsScreen extends Screen {
         this.parent = parent;
     }
 
+    /**
+     * 初始化屏幕。
+     * 加载当前配置，创建配置按钮（自动更新、自动启动），
+     * 如果是房主，则添加难度和 PVP 设置按钮。
+     */
     @Override
     protected void init() {
         tempPath = FabricConfig.getExternalEnderPath();

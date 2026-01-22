@@ -24,16 +24,27 @@ import net.minecraftforge.client.event.ScreenEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
+/**
+ * 局域网分享屏幕处理器（Forge）。
+ * 劫持“对局域网开放”屏幕，允许用户选择通过末影联机进行托管。
+ */
 @Mod.EventBusSubscriber(modid = "ender_online", value = Dist.CLIENT, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class LanShareHandlerForge {
     private static boolean enableEnder = false;
     private static final Gson GSON = new Gson();
+    /** 房间状态轮询线程池 */
     private static final ScheduledExecutorService ROOM_POLL_EXECUTOR = Executors.newSingleThreadScheduledExecutor(r -> {
         Thread thread = new Thread(r, "Ender-Room-Poll");
         thread.setDaemon(true);
         return thread;
     });
 
+    /**
+     * 屏幕初始化后事件。
+     * 在 ShareToLanScreen 中添加开关按钮，并替换原有的“开放”按钮逻辑。
+     *
+     * @param event 屏幕初始化事件
+     */
     @SubscribeEvent
     public static void onScreenInit(ScreenEvent.Init.Post event) {
         if (event.getScreen() instanceof ShareToLanScreen screen) {
@@ -89,7 +100,7 @@ public class LanShareHandlerForge {
                         if (gameMode == net.minecraft.world.level.GameType.SPECTATOR) {
                             visitorPermission = "仅观战";
                         } else if (gameMode == net.minecraft.world.level.GameType.ADVENTURE) {
-                            // visitorPermission = "仅聊天"; // Optional: Map Adventure to Chat Only if desired, or keep Interactive
+                            
                         }
                         
                         EnderApiClient.setLocalSettings(allowCheats, visitorPermission);

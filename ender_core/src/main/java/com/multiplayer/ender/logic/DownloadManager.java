@@ -19,13 +19,33 @@ import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * 下载管理工具类。
+ * 提供异步文件下载和 tar.gz 格式解压功能。
+ *
+ * @author Ender Developer
+ * @version 1.0
+ * @since 1.0
+ */
 public class DownloadManager {
+    /**
+     * 日志记录器
+     */
     private static final Logger LOGGER = LoggerFactory.getLogger(DownloadManager.class);
 
+    /**
+     * 异步下载文件。
+     *
+     * @param url 下载地址
+     * @param targetDir 目标目录
+     * @param filename 保存的文件名
+     * @param progressCallback 进度回调函数，接收 0.0 到 1.0 之间的 double 值
+     * @return 包含下载文件路径的 CompletableFuture
+     */
     public static CompletableFuture<Path> download(String url, Path targetDir, String filename, Consumer<Double> progressCallback) {
         return CompletableFuture.supplyAsync(() -> {
             try {
-                // Force gh-proxy
+                
                 String finalUrl = url;
                 if (url.startsWith("https://github.com") && !url.contains("gh-proxy")) {
                      finalUrl = "https://hk.gh-proxy.org/" + url;
@@ -80,6 +100,13 @@ public class DownloadManager {
         });
     }
 
+    /**
+     * 解压 .tar.gz 格式的归档文件。
+     *
+     * @param tarGzPath .tar.gz 文件路径
+     * @param outputDir 解压输出目录
+     * @throws IOException 当解压过程中发生 I/O 错误时抛出
+     */
     public static void extractTarGz(Path tarGzPath, Path outputDir) throws IOException {
         LOGGER.info("正在解压: {}", tarGzPath);
         try (InputStream fi = Files.newInputStream(tarGzPath);

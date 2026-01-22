@@ -8,18 +8,41 @@ import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.NotNull;
 import java.util.function.BiConsumer;
 
+/**
+ * 添加名单条目界面。
+ * 用于输入玩家名称并将其添加到指定的名单（白名单/黑名单/禁言列表）中。
+ *
+ * @author Ender Developer
+ * @version 1.0
+ * @since 1.0
+ */
 public class AddListEntryScreen extends EnderBaseScreen {
+    /** 添加回调函数 (名称, 类型) */
     private final BiConsumer<String, String> onAdd;
+    /** 名称输入框 */
     private EditBox nameField;
-    private String selectedType = "whitelist"; // default
+    /** 当前选中的列表类型 */
+    private String selectedType = "whitelist"; 
+    /** 可用的列表类型 */
     private String[] types = new String[]{"whitelist", "blacklist", "mute_list"};
 
+    /**
+     * 构造函数。
+     *
+     * @param parent      父屏幕
+     * @param initialType 初始列表类型
+     * @param onAdd       添加回调
+     */
     public AddListEntryScreen(Screen parent, String initialType, BiConsumer<String, String> onAdd) {
         super(Component.literal("添加名单"), parent);
         this.onAdd = onAdd;
         this.selectedType = initialType;
     }
 
+    /**
+     * 初始化界面内容。
+     * 创建输入框、类型切换按钮和操作按钮。
+     */
     @Override
     protected void initContent() {
         LinearLayout content = LinearLayout.vertical().spacing(8);
@@ -30,7 +53,7 @@ public class AddListEntryScreen extends EnderBaseScreen {
         content.addChild(this.nameField);
 
         content.addChild(Button.builder(Component.literal("添加到: " + getTypeName(selectedType)), b -> {
-            // Cycle type
+            
             int idx = 0;
             for(int i=0; i<types.length; i++) {
                 if(types[i].equals(selectedType)) {
@@ -58,6 +81,12 @@ public class AddListEntryScreen extends EnderBaseScreen {
         this.setInitialFocus(this.nameField);
     }
 
+    /**
+     * 获取类型显示名称。
+     *
+     * @param type 类型标识
+     * @return 显示名称
+     */
     private String getTypeName(String type) {
         return switch (type) {
             case "whitelist" -> "白名单";

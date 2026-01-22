@@ -24,12 +24,28 @@ import net.neoforged.neoforge.client.event.ScreenEvent;
 import java.util.concurrent.CompletableFuture;
 
 @EventBusSubscriber(modid = "ender_online", value = Dist.CLIENT)
+/**
+ * 游戏内菜单（暂停界面）处理器。
+ * <p>
+ * 该类负责在 Minecraft 暂停界面（Esc 菜单）中注入自定义按钮和信息显示。
+ * 功能包括：
+ * 1. 显示/隐藏“末影联机”房间信息悬浮窗。
+ * 2. 提供“房间设置”入口（房主）或“房间信息”入口（访客）。
+ * 3. 在单人游戏且已开放局域网时，提供快速“创建房间”按钮。
+ * </p>
+ */
 public class InGameMenuHandler {
     private static final Gson GSON = new Gson();
     private static boolean showInfoOverlay = false;
     private static JsonObject lastState = null;
     private static long lastCreateClickTime = 0;
 
+    /**
+     * 屏幕初始化事件回调。
+     * 当暂停界面打开时调用，注入自定义按钮和状态组件。
+     *
+     * @param event 屏幕初始化事件
+     */
     @SubscribeEvent
     public static void onScreenInit(ScreenEvent.Init.Post event) {
         if (event.getScreen() instanceof PauseScreen screen) {
@@ -103,6 +119,11 @@ public class InGameMenuHandler {
         }
     }
 
+    /**
+     * 内部组件：房间状态挂件。
+     * 负责定期轮询后端状态，控制按钮显隐，并渲染信息悬浮窗。
+     * 该组件不可见（透明），但利用 render 方法进行逻辑更新和覆盖绘制。
+     */
     private static class RoomStateWidget extends AbstractWidget {
         private final Button infoBtn;
         private final Button settingsBtn;
@@ -132,6 +153,12 @@ public class InGameMenuHandler {
             }
         }
 
+        /**
+         * 渲染房间信息悬浮窗。
+         * 显示当前房间号、在线成员列表等信息。
+         *
+         * @param guiGraphics GUI 绘图上下文
+         */
         private void renderInfoOverlay(GuiGraphics guiGraphics) {
             int startX = 10;
             int startY = 10;
@@ -177,6 +204,10 @@ public class InGameMenuHandler {
             }
         }
 
+        /**
+         * 更新当前状态。
+         * 异步请求后端状态，并根据返回结果更新 UI 按钮的可见性和文本。
+         */
         private void updateState() {
             EnderApiClient.getState().whenComplete((stateJson, ex) -> {
                 if (ex != null || stateJson == null) {

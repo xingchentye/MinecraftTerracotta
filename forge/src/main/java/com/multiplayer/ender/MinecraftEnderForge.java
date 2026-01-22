@@ -13,11 +13,19 @@ import net.minecraftforge.fml.ModLoadingContext;
 import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 
+/**
+ * 末影联机 Forge 模组主类。
+ * 负责模组的初始化、配置注册和事件总线注册。
+ */
 @Mod(MinecraftEnderForge.MODID)
 public class MinecraftEnderForge {
     public static final String MODID = "ender_online";
     public static final Logger LOGGER = LogUtils.getLogger();
 
+    /**
+     * 构造函数。
+     * 注册配置和事件监听器。
+     */
     public MinecraftEnderForge() {
         IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
 
@@ -29,10 +37,20 @@ public class MinecraftEnderForge {
         ModLoadingContext.get().registerConfig(ModConfig.Type.CLIENT, ConfigForge.CLIENT_SPEC, "ender.toml");
     }
 
+    /**
+     * 通用设置阶段。
+     *
+     * @param event FML通用设置事件
+     */
     private void commonSetup(FMLCommonSetupEvent event) {
         LOGGER.info("末影联机 Forge Mod 已加载 - 通用设置");
     }
 
+    /**
+     * 服务器启动事件。
+     *
+     * @param event 服务器启动事件
+     */
     @SubscribeEvent
     public void onServerStarting(ServerStartingEvent event) {
         LOGGER.info("末影联机 Forge - 服务器正在启动");

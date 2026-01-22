@@ -14,6 +14,10 @@ import org.jetbrains.annotations.NotNull;
 
 import java.util.concurrent.CompletableFuture;
 
+/**
+ * 创建房间屏幕（Fabric）。
+ * 允许玩家作为房主创建并主持联机游戏。
+ */
 public class HostScreen extends EnderBaseScreen {
     private Text statusText = Text.translatable("ender.host.status.ready");
     private String roomCode = "";
@@ -28,6 +32,10 @@ public class HostScreen extends EnderBaseScreen {
         super(Text.translatable("ender.host.title"), parent);
     }
 
+    /**
+     * 初始化内容。
+     * 创建开始托管按钮和取消按钮。
+     */
     @Override
     protected void initContent() {
         DirectionalLayoutWidget layout = DirectionalLayoutWidget.vertical().spacing(10);
@@ -42,6 +50,10 @@ public class HostScreen extends EnderBaseScreen {
         this.layout.addBody(layout);
     }
 
+    /**
+     * 开始托管游戏。
+     * 获取单人游戏端口，向后台发送创建房间请求。
+     */
     private void startHosting() {
         long now = System.currentTimeMillis();
         if (now - lastClickTime < 300) return;
@@ -70,6 +82,10 @@ public class HostScreen extends EnderBaseScreen {
         });
     }
 
+    /**
+     * 每刻更新。
+     * 轮询后台状态以检查房间是否创建成功。
+     */
     @Override
     public void tick() {
         super.tick();
@@ -82,6 +98,10 @@ public class HostScreen extends EnderBaseScreen {
         }
     }
 
+    /**
+     * 检查托管状态。
+     * 解析后台返回的状态 JSON，如果状态为 host-ok，则认为创建成功并关闭屏幕。
+     */
     private void checkHostStatus() {
         EnderApiClient.getState().thenAccept(stateJson -> {
             if (stateJson == null) return;
@@ -98,9 +118,8 @@ public class HostScreen extends EnderBaseScreen {
                             if (this.parent instanceof EnderDashboard dashboard) {
                                 dashboard.setConnected(true);
                             }
-                            if (this.client != null) {
-                                this.client.execute(this::close);
-                            }
+                            
+                            this.client.execute(this::close);
                         }
                     } else if ("host-starting".equals(state)) {
                         statusText = Text.translatable("ender.host.status.creating");

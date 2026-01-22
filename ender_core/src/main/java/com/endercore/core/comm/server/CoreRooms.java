@@ -18,10 +18,29 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import com.endercore.core.comm.protocol.CoreResponse;
 
+/**
+ * 房间管理核心工具类。
+ * 提供房间的创建、加入、离开、销毁以及消息转发等功能。
+ *
+ * @author Ender Developer
+ * @version 1.0
+ * @since 1.0
+ */
 public final class CoreRooms {
+    /**
+     * 私有构造函数，防止实例化。
+     */
     private CoreRooms() {
     }
 
+    /**
+     * 在 CoreWebSocketServer 上注册房间管理服务。
+     * 注册 "room:create", "room:join", "room:leave", "room:list", 
+     * "room:info", "room:send", "room:set_meta", "room:destroy" 等请求处理器。
+     * 同时注册连接断开监听器以处理异常退出。
+     *
+     * @param server CoreWebSocketServer 实例
+     */
     public static void install(CoreWebSocketServer server) {
         Objects.requireNonNull(server, "server");
         RoomManager manager = new RoomManager(server);
@@ -38,13 +57,24 @@ public final class CoreRooms {
         server.register("room:destroy", manager::destroy);
     }
 
+    /**
+     * 房间管理器内部类。
+     * 负责处理所有与房间相关的逻辑。
+     */
     private static final class RoomManager {
+        /** 无效的负载状态码 */
         private static final int STATUS_INVALID_PAYLOAD = 1;
+        /** 未找到房间状态码 */
         private static final int STATUS_NOT_FOUND = 2;
+        /** 房间已满状态码 */
         private static final int STATUS_ROOM_FULL = 3;
+        /** 房间已关闭状态码 */
         private static final int STATUS_ROOM_CLOSED = 4;
+        /** 权限不足状态码 */
         private static final int STATUS_PERMISSION_DENIED = 5;
+        /** 不在房间内状态码 */
         private static final int STATUS_NOT_IN_ROOM = 6;
+        /** 房间已存在状态码 */
         private static final int STATUS_ALREADY_EXISTS = 7;
 
         private static final SecureRandom RANDOM = new SecureRandom();
@@ -57,10 +87,21 @@ public final class CoreRooms {
         private final ConcurrentHashMap<String, Room> rooms = new ConcurrentHashMap<>();
         private final ConcurrentHashMap<String, Set<String>> memberRooms = new ConcurrentHashMap<>();
 
+        /**
+         * 构造函数。
+         *
+         * @param server CoreWebSocketServer 实例
+         */
         private RoomManager(CoreWebSocketServer server) {
             this.server = server;
         }
 
+        /**
+         * 处理连接断开事件。
+         * 自动将断开连接的用户从其所在的房间中移除。
+         *
+         * @param remoteAddress 远程地址
+         */
         private void onDisconnect(InetSocketAddress remoteAddress) {
             String memberId = connectionId(remoteAddress);
             Set<String> joined = memberRooms.remove(memberId);
@@ -76,6 +117,13 @@ public final class CoreRooms {
             }
         }
 
+        /**
+         * 创建房间。
+         *
+         * @param req 创建请求
+         * @return 响应对象
+         * @throws Exception 当创建失败时抛出
+         */
         private CoreResponse create(CoreRequest req) throws Exception {
             DataInputStream in = new DataInputStream(new ByteArrayInputStream(req.payload()));
             String name = readString(in);
@@ -116,166 +164,203 @@ public final class CoreRooms {
             return new CoreResponse(0, req.requestId(), req.kind(), baos.toByteArray());
         }
 
-        private CoreResponse join(CoreRequest req) throws Exception {
-            DataInputStream in = new DataInputStream(new ByteArrayInputStream(req.payload()));
-            String roomIdInput = readString(in);
-            if (roomIdInput.isBlank()) {
-                return error(req, STATUS_INVALID_PAYLOAD, "missing roomId");
-            }
-            RoomCode parsed = parseRoomCode(roomIdInput);
-            if (parsed == null) {
-                return error(req, STATUS_INVALID_PAYLOAD, "invalid roomId");
-            }
-            String roomId = parsed.code;
-            Room room = rooms.get(roomId);
-            if (room == null) {
-                return error(req, STATUS_NOT_FOUND, "room not found");
-            }
+        /**
+     * 加入房间。
+     *
+     * @param req 加入请求
+     * @return 响应对象
+     * @throws Exception 当加入失败时抛出
+     */
+    private CoreResponse join(CoreRequest req) throws Exception {
+        DataInputStream in = new DataInputStream(new ByteArrayInputStream(req.payload()));
+        String roomIdInput = readString(in);
+        if (roomIdInput.isBlank()) {
+            return error(req, STATUS_INVALID_PAYLOAD, "missing roomId");
+        }
+        RoomCode parsed = parseRoomCode(roomIdInput);
+        if (parsed == null) {
+            return error(req, STATUS_INVALID_PAYLOAD, "invalid roomId");
+        }
+        String roomId = parsed.code;
+        Room room = rooms.get(roomId);
+        if (room == null) {
+            return error(req, STATUS_NOT_FOUND, "room not found");
+        }
 
-            String memberId = connectionId(req.remoteAddress());
-            InetSocketAddress remote = req.remoteAddress();
-            boolean joinedNow;
-            List<InetSocketAddress> remotes;
-            synchronized (room.lock) {
-                if (!room.open) {
-                    return error(req, STATUS_ROOM_CLOSED, "room is closed");
-                }
-                if (room.members.size() >= room.maxMembers && !room.members.containsKey(memberId)) {
-                    return error(req, STATUS_ROOM_FULL, "room is full");
-                }
-                joinedNow = room.members.putIfAbsent(memberId, remote) == null;
-                if (joinedNow) {
-                    memberRooms.computeIfAbsent(memberId, k -> ConcurrentHashMap.newKeySet()).add(roomId);
-                }
-                remotes = new ArrayList<>(room.members.values());
+        String memberId = connectionId(req.remoteAddress());
+        InetSocketAddress remote = req.remoteAddress();
+        boolean joinedNow;
+        List<InetSocketAddress> remotes;
+        synchronized (room.lock) {
+            if (!room.open) {
+                return error(req, STATUS_ROOM_CLOSED, "room is closed");
             }
-
+            if (room.members.size() >= room.maxMembers && !room.members.containsKey(memberId)) {
+                return error(req, STATUS_ROOM_FULL, "room is full");
+            }
+            joinedNow = room.members.putIfAbsent(memberId, remote) == null;
             if (joinedNow) {
-                server.sendEventToMany(remotes, "room:member_joined", payloadRoomMember(roomId, memberId));
+                memberRooms.computeIfAbsent(memberId, k -> ConcurrentHashMap.newKeySet()).add(roomId);
             }
-
-            ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            DataOutputStream out = new DataOutputStream(baos);
-            writeString(out, room.id);
-            writeString(out, memberId);
-            writeString(out, room.hostId);
-            writeString(out, room.name);
-            out.writeShort(room.maxMembers);
-            out.writeByte(room.open ? 1 : 0);
-            writeMembers(out, room.members.keySet());
-            writeString(out, room.networkName);
-            writeString(out, room.networkSecret);
-            return new CoreResponse(0, req.requestId(), req.kind(), baos.toByteArray());
+            remotes = new ArrayList<>(room.members.values());
         }
 
-        private CoreResponse leave(CoreRequest req) throws Exception {
-            DataInputStream in = new DataInputStream(new ByteArrayInputStream(req.payload()));
-            String roomIdInput = readString(in);
-            if (roomIdInput.isBlank()) {
-                return error(req, STATUS_INVALID_PAYLOAD, "missing roomId");
-            }
-            RoomCode parsed = parseRoomCode(roomIdInput);
-            if (parsed == null) {
-                return error(req, STATUS_INVALID_PAYLOAD, "invalid roomId");
-            }
-            String roomId = parsed.code;
-            Room room = rooms.get(roomId);
-            if (room == null) {
-                return error(req, STATUS_NOT_FOUND, "room not found");
-            }
-            String memberId = connectionId(req.remoteAddress());
-            boolean left = handleLeaveInternal(room, memberId);
-            if (!left) {
-                return error(req, STATUS_NOT_IN_ROOM, "not in room");
-            }
-
-            ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            DataOutputStream out = new DataOutputStream(baos);
-            writeString(out, roomId);
-            return new CoreResponse(0, req.requestId(), req.kind(), baos.toByteArray());
+        if (joinedNow) {
+            server.sendEventToMany(remotes, "room:member_joined", payloadRoomMember(roomId, memberId));
         }
 
-        private boolean handleLeaveInternal(Room room, String memberId) {
-            boolean removed;
-            List<InetSocketAddress> remainingRemotes = List.of();
-            boolean destroyed = false;
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        DataOutputStream out = new DataOutputStream(baos);
+        writeString(out, room.id);
+        writeString(out, memberId);
+        writeString(out, room.hostId);
+        writeString(out, room.name);
+        out.writeShort(room.maxMembers);
+        out.writeByte(room.open ? 1 : 0);
+        writeMembers(out, room.members.keySet());
+        writeString(out, room.networkName);
+        writeString(out, room.networkSecret);
+        return new CoreResponse(0, req.requestId(), req.kind(), baos.toByteArray());
+    }
 
-            synchronized (room.lock) {
-                removed = room.members.remove(memberId) != null;
-                if (!removed) {
-                    return false;
+    /**
+     * 离开房间。
+     *
+     * @param req 离开请求
+     * @return 响应对象
+     * @throws Exception 当离开失败时抛出
+     */
+    private CoreResponse leave(CoreRequest req) throws Exception {
+        DataInputStream in = new DataInputStream(new ByteArrayInputStream(req.payload()));
+        String roomIdInput = readString(in);
+        if (roomIdInput.isBlank()) {
+            return error(req, STATUS_INVALID_PAYLOAD, "missing roomId");
+        }
+        RoomCode parsed = parseRoomCode(roomIdInput);
+        if (parsed == null) {
+            return error(req, STATUS_INVALID_PAYLOAD, "invalid roomId");
+        }
+        String roomId = parsed.code;
+        Room room = rooms.get(roomId);
+        if (room == null) {
+            return error(req, STATUS_NOT_FOUND, "room not found");
+        }
+        String memberId = connectionId(req.remoteAddress());
+        boolean left = handleLeaveInternal(room, memberId);
+        if (!left) {
+            return error(req, STATUS_NOT_IN_ROOM, "not in room");
+        }
+
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        DataOutputStream out = new DataOutputStream(baos);
+        writeString(out, roomId);
+        return new CoreResponse(0, req.requestId(), req.kind(), baos.toByteArray());
+    }
+
+    /**
+     * 处理离开房间的内部逻辑。
+     * 如果房主离开，房间将被销毁。
+     *
+     * @param room 房间对象
+     * @param memberId 成员 ID
+     * @return 如果成功离开返回 true，否则返回 false
+     */
+    private boolean handleLeaveInternal(Room room, String memberId) {
+        boolean removed;
+        List<InetSocketAddress> remainingRemotes = List.of();
+        boolean destroyed = false;
+
+        synchronized (room.lock) {
+            removed = room.members.remove(memberId) != null;
+            if (!removed) {
+                return false;
+            }
+            Set<String> joined = memberRooms.get(memberId);
+            if (joined != null) {
+                joined.remove(room.id);
+                if (joined.isEmpty()) {
+                    memberRooms.remove(memberId, joined);
                 }
-                Set<String> joined = memberRooms.get(memberId);
-                if (joined != null) {
-                    joined.remove(room.id);
-                    if (joined.isEmpty()) {
-                        memberRooms.remove(memberId, joined);
-                    }
-                }
-                if (room.members.isEmpty()) {
-                    rooms.remove(room.id, room);
-                    destroyed = true;
-                } else if (Objects.equals(room.hostId, memberId)) {
-                    destroyed = true;
-                    rooms.remove(room.id, room);
-                    remainingRemotes = new ArrayList<>(room.members.values());
-                    for (String otherMemberId : room.members.keySet()) {
-                        Set<String> otherJoined = memberRooms.get(otherMemberId);
-                        if (otherJoined != null) {
-                            otherJoined.remove(room.id);
-                            if (otherJoined.isEmpty()) {
-                                memberRooms.remove(otherMemberId, otherJoined);
-                            }
+            }
+            if (room.members.isEmpty()) {
+                rooms.remove(room.id, room);
+                destroyed = true;
+            } else if (Objects.equals(room.hostId, memberId)) {
+                destroyed = true;
+                rooms.remove(room.id, room);
+                remainingRemotes = new ArrayList<>(room.members.values());
+                for (String otherMemberId : room.members.keySet()) {
+                    Set<String> otherJoined = memberRooms.get(otherMemberId);
+                    if (otherJoined != null) {
+                        otherJoined.remove(room.id);
+                        if (otherJoined.isEmpty()) {
+                            memberRooms.remove(otherMemberId, otherJoined);
                         }
                     }
-                    room.members.clear();
-                } else {
-                    remainingRemotes = new ArrayList<>(room.members.values());
                 }
+                room.members.clear();
+            } else {
+                remainingRemotes = new ArrayList<>(room.members.values());
             }
-
-            if (removed && !destroyed) {
-                server.sendEventToMany(remainingRemotes, "room:member_left", payloadRoomMember(room.id, memberId));
-            }
-            if (destroyed) {
-                server.sendEventToMany(remainingRemotes, "room:destroyed", payloadRoom(room.id));
-            }
-            return true;
         }
 
-        private CoreResponse list(CoreRequest req) throws Exception {
-            DataInputStream in = new DataInputStream(new ByteArrayInputStream(req.payload()));
-            int offset = in.readUnsignedShort();
-            int limit = in.readUnsignedShort();
-            if (limit <= 0) {
-                limit = 50;
-            }
-            if (limit > 200) {
-                limit = 200;
-            }
+        if (removed && !destroyed) {
+            server.sendEventToMany(remainingRemotes, "room:member_left", payloadRoomMember(room.id, memberId));
+        }
+        if (destroyed) {
+            server.sendEventToMany(remainingRemotes, "room:destroyed", payloadRoom(room.id));
+        }
+        return true;
+    }
 
-            List<Room> all = new ArrayList<>(rooms.values());
-            all.sort(Comparator.comparing(r -> r.id));
-
-            int from = Math.min(offset, all.size());
-            int to = Math.min(from + limit, all.size());
-            List<Room> page = all.subList(from, to);
-
-            ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            DataOutputStream out = new DataOutputStream(baos);
-            out.writeShort(page.size());
-            for (Room room : page) {
-                writeString(out, room.id);
-                writeString(out, room.name);
-                writeString(out, room.hostId);
-                out.writeShort(room.members.size());
-                out.writeShort(room.maxMembers);
-                out.writeByte(room.open ? 1 : 0);
-            }
-            return new CoreResponse(0, req.requestId(), req.kind(), baos.toByteArray());
+    /**
+     * 列出房间。
+     * 支持分页。
+     *
+     * @param req 列出请求
+     * @return 响应对象
+     * @throws Exception 当获取列表失败时抛出
+     */
+    private CoreResponse list(CoreRequest req) throws Exception {
+        DataInputStream in = new DataInputStream(new ByteArrayInputStream(req.payload()));
+        int offset = in.readUnsignedShort();
+        int limit = in.readUnsignedShort();
+        if (limit <= 0) {
+            limit = 50;
+        }
+        if (limit > 200) {
+            limit = 200;
         }
 
-        private CoreResponse info(CoreRequest req) throws Exception {
+        List<Room> all = new ArrayList<>(rooms.values());
+        all.sort(Comparator.comparing(r -> r.id));
+
+        int from = Math.min(offset, all.size());
+        int to = Math.min(from + limit, all.size());
+        List<Room> page = all.subList(from, to);
+
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        DataOutputStream out = new DataOutputStream(baos);
+        out.writeShort(page.size());
+        for (Room room : page) {
+            writeString(out, room.id);
+            writeString(out, room.name);
+            writeString(out, room.hostId);
+            out.writeShort(room.members.size());
+            out.writeShort(room.maxMembers);
+            out.writeByte(room.open ? 1 : 0);
+        }
+        return new CoreResponse(0, req.requestId(), req.kind(), baos.toByteArray());
+    }
+
+    /**
+     * 获取房间信息。
+     *
+     * @param req 信息请求
+     * @return 响应对象
+     * @throws Exception 当获取信息失败时抛出
+     */
+    private CoreResponse info(CoreRequest req) throws Exception {
             DataInputStream in = new DataInputStream(new ByteArrayInputStream(req.payload()));
             String roomIdInput = readString(in);
             if (roomIdInput.isBlank()) {
@@ -310,6 +395,13 @@ public final class CoreRooms {
             return new CoreResponse(0, req.requestId(), req.kind(), baos.toByteArray());
         }
 
+        /**
+         * 发送房间消息。
+         *
+         * @param req 发送请求
+         * @return 响应对象
+         * @throws Exception 当发送失败时抛出
+         */
         private CoreResponse send(CoreRequest req) throws Exception {
             DataInputStream in = new DataInputStream(new ByteArrayInputStream(req.payload()));
             String roomIdInput = readString(in);
@@ -344,6 +436,14 @@ public final class CoreRooms {
             return new CoreResponse(0, req.requestId(), req.kind(), new byte[0]);
         }
 
+        /**
+         * 设置房间元数据。
+         * 只有房主可以设置。
+         *
+         * @param req 设置请求
+         * @return 响应对象
+         * @throws Exception 当设置失败时抛出
+         */
         private CoreResponse setMeta(CoreRequest req) throws Exception {
             DataInputStream in = new DataInputStream(new ByteArrayInputStream(req.payload()));
             String roomIdInput = readString(in);
@@ -377,6 +477,14 @@ public final class CoreRooms {
             return new CoreResponse(0, req.requestId(), req.kind(), new byte[0]);
         }
 
+        /**
+         * 销毁房间。
+         * 只有房主可以销毁。
+         *
+         * @param req 销毁请求
+         * @return 响应对象
+         * @throws Exception 当销毁失败时抛出
+         */
         private CoreResponse destroy(CoreRequest req) throws Exception {
             DataInputStream in = new DataInputStream(new ByteArrayInputStream(req.payload()));
             String roomIdInput = readString(in);
@@ -417,10 +525,25 @@ public final class CoreRooms {
             return new CoreResponse(0, req.requestId(), req.kind(), new byte[0]);
         }
 
+        /**
+         * 构建错误响应。
+         *
+         * @param req 原始请求
+         * @param status 状态码
+         * @param messageUtf8 错误消息
+         * @return 错误响应对象
+         */
         private static CoreResponse error(CoreRequest req, int status, String messageUtf8) {
             return new CoreResponse(status, req.requestId(), req.kind(), messageUtf8.getBytes(StandardCharsets.UTF_8));
         }
 
+        /**
+         * 获取连接 ID。
+         * 格式：IP:Port
+         *
+         * @param remoteAddress 远程地址
+         * @return 连接 ID
+         */
         private static String connectionId(InetSocketAddress remoteAddress) {
             if (remoteAddress == null) {
                 return "unknown:0";
@@ -429,6 +552,11 @@ public final class CoreRooms {
             return host + ":" + remoteAddress.getPort();
         }
 
+        /**
+         * 生成随机房间代码。
+         *
+         * @return 房间代码对象
+         */
         private static RoomCode generateRoomCode() {
             BigInteger value = new BigInteger(128, RANDOM).mod(CODE_SPACE);
             value = value.subtract(value.mod(CODE_CHECK));
@@ -442,6 +570,13 @@ public final class CoreRooms {
             return fromDigits(digits);
         }
 
+        /**
+         * 解析房间代码。
+         * 验证格式和校验和。
+         *
+         * @param input 输入字符串
+         * @return 房间代码对象，如果无效返回 null
+         */
         private static RoomCode parseRoomCode(String input) {
             if (input == null) {
                 return null;
@@ -489,6 +624,12 @@ public final class CoreRooms {
             return null;
         }
 
+        /**
+         * 查找字符对应的数值。
+         *
+         * @param c 字符
+         * @return 数值，如果无效返回 -1
+         */
         private static int lookupDigit(char c) {
             char up = Character.toUpperCase(c);
             if (up == 'I') {
@@ -504,6 +645,12 @@ public final class CoreRooms {
             return -1;
         }
 
+        /**
+         * 从数值生成房间代码。
+         *
+         * @param digits 数值数组
+         * @return 房间代码对象
+         */
         private static RoomCode fromDigits(int[] digits) {
             StringBuilder code = new StringBuilder("U/XXXX-XXXX-XXXX-XXXX".length());
             code.append("U/");
@@ -532,11 +679,21 @@ public final class CoreRooms {
             return new RoomCode(code.toString(), networkName.toString(), networkSecret.toString());
         }
 
+        /**
+         * 房间代码类。
+         */
         private static final class RoomCode {
             private final String code;
             private final String networkName;
             private final String networkSecret;
 
+            /**
+             * 构造函数。
+             *
+             * @param code 房间代码
+             * @param networkName 网络名称
+             * @param networkSecret 网络密钥
+             */
             private RoomCode(String code, String networkName, String networkSecret) {
                 this.code = code;
                 this.networkName = networkName;
@@ -544,113 +701,179 @@ public final class CoreRooms {
             }
         }
 
-        private static String readString(DataInputStream in) throws Exception {
-            int len = in.readUnsignedShort();
-            if (len == 0) {
-                return "";
-            }
-            byte[] bytes = new byte[len];
-            in.readFully(bytes);
-            return new String(bytes, StandardCharsets.UTF_8);
+        /**
+     * 读取字符串。
+     * 格式：Length(UnsignedShort) + Bytes
+     *
+     * @param in 输入流
+     * @return 字符串
+     * @throws Exception 当读取失败时抛出
+     */
+    private static String readString(DataInputStream in) throws Exception {
+        int len = in.readUnsignedShort();
+        if (len == 0) {
+            return "";
         }
+        byte[] bytes = new byte[len];
+        in.readFully(bytes);
+        return new String(bytes, StandardCharsets.UTF_8);
+    }
 
-        private static void writeString(DataOutputStream out, String s) throws Exception {
-            if (s == null || s.isEmpty()) {
-                out.writeShort(0);
-                return;
-            }
-            byte[] bytes = s.getBytes(StandardCharsets.UTF_8);
-            if (bytes.length > 65535) {
-                throw new IllegalArgumentException("string too long");
-            }
-            out.writeShort(bytes.length);
-            out.write(bytes);
+    /**
+     * 写入字符串。
+     * 格式：Length(UnsignedShort) + Bytes
+     *
+     * @param out 输出流
+     * @param s 字符串
+     * @throws Exception 当写入失败时抛出
+     */
+    private static void writeString(DataOutputStream out, String s) throws Exception {
+        if (s == null || s.isEmpty()) {
+            out.writeShort(0);
+            return;
         }
-
-        private static void writeMembers(DataOutputStream out, Set<String> memberIds) throws Exception {
-            out.writeShort(memberIds.size());
-            for (String id : memberIds) {
-                writeString(out, id);
-            }
+        byte[] bytes = s.getBytes(StandardCharsets.UTF_8);
+        if (bytes.length > 65535) {
+            throw new IllegalArgumentException("string too long");
         }
+        out.writeShort(bytes.length);
+        out.write(bytes);
+    }
 
-        private static byte[] payloadRoom(String roomId) {
-            try {
-                ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                DataOutputStream out = new DataOutputStream(baos);
-                writeString(out, roomId);
-                return baos.toByteArray();
-            } catch (Exception e) {
-                return new byte[0];
-            }
-        }
-
-        private static byte[] payloadRoomMember(String roomId, String memberId) {
-            try {
-                ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                DataOutputStream out = new DataOutputStream(baos);
-                writeString(out, roomId);
-                writeString(out, memberId);
-                return baos.toByteArray();
-            } catch (Exception e) {
-                return new byte[0];
-            }
-        }
-
-        private static byte[] payloadRoomMeta(String roomId, byte[] meta) {
-            try {
-                ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                DataOutputStream out = new DataOutputStream(baos);
-                writeString(out, roomId);
-                out.writeInt(meta == null ? 0 : meta.length);
-                if (meta != null && meta.length > 0) {
-                    out.write(meta);
-                }
-                return baos.toByteArray();
-            } catch (Exception e) {
-                return new byte[0];
-            }
-        }
-
-        private static byte[] payloadRoomMessage(String roomId, String fromId, String channel, byte[] message) {
-            try {
-                ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                DataOutputStream out = new DataOutputStream(baos);
-                writeString(out, roomId);
-                writeString(out, fromId);
-                writeString(out, channel);
-                out.writeInt(message == null ? 0 : message.length);
-                if (message != null && message.length > 0) {
-                    out.write(message);
-                }
-                return baos.toByteArray();
-            } catch (Exception e) {
-                return new byte[0];
-            }
+    /**
+     * 写入成员 ID 集合。
+     *
+     * @param out 输出流
+     * @param memberIds 成员 ID 集合
+     * @throws Exception 当写入失败时抛出
+     */
+    private static void writeMembers(DataOutputStream out, Set<String> memberIds) throws Exception {
+        out.writeShort(memberIds.size());
+        for (String id : memberIds) {
+            writeString(out, id);
         }
     }
 
-    private static final class Room {
-        private final String id;
-        private final String networkName;
-        private final String networkSecret;
-        private final Object lock = new Object();
-        private final ConcurrentHashMap<String, InetSocketAddress> members = new ConcurrentHashMap<>();
-        private final long createdAtMillis = System.currentTimeMillis();
-        private final int maxMembers;
-        private volatile String name;
-        private volatile boolean open;
-        private volatile String hostId;
-        private volatile byte[] meta;
-
-        private Room(String id, String networkName, String networkSecret, String name, int maxMembers, boolean open, String hostId) {
-            this.id = id;
-            this.networkName = networkName;
-            this.networkSecret = networkSecret;
-            this.name = name;
-            this.maxMembers = maxMembers;
-            this.open = open;
-            this.hostId = hostId;
+    /**
+     * 构建房间信息负载。
+     *
+     * @param roomId 房间 ID
+     * @return 字节数组负载
+     */
+    private static byte[] payloadRoom(String roomId) {
+        try {
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            DataOutputStream out = new DataOutputStream(baos);
+            writeString(out, roomId);
+            return baos.toByteArray();
+        } catch (Exception e) {
+            return new byte[0];
         }
     }
+
+    /**
+     * 构建房间成员信息负载。
+     *
+     * @param roomId 房间 ID
+     * @param memberId 成员 ID
+     * @return 字节数组负载
+     */
+    private static byte[] payloadRoomMember(String roomId, String memberId) {
+        try {
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            DataOutputStream out = new DataOutputStream(baos);
+            writeString(out, roomId);
+            writeString(out, memberId);
+            return baos.toByteArray();
+        } catch (Exception e) {
+            return new byte[0];
+        }
+    }
+
+    /**
+     * 构建房间元数据负载。
+     *
+     * @param roomId 房间 ID
+     * @param meta 元数据
+     * @return 字节数组负载
+     */
+    private static byte[] payloadRoomMeta(String roomId, byte[] meta) {
+        try {
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            DataOutputStream out = new DataOutputStream(baos);
+            writeString(out, roomId);
+            out.writeInt(meta == null ? 0 : meta.length);
+            if (meta != null && meta.length > 0) {
+                out.write(meta);
+            }
+            return baos.toByteArray();
+        } catch (Exception e) {
+            return new byte[0];
+        }
+    }
+
+    /**
+     * 构建房间消息负载。
+     *
+     * @param roomId 房间 ID
+     * @param fromId 发送者 ID
+     * @param channel 频道
+     * @param message 消息内容
+     * @return 字节数组负载
+     */
+    private static byte[] payloadRoomMessage(String roomId, String fromId, String channel, byte[] message) {
+        try {
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            DataOutputStream out = new DataOutputStream(baos);
+            writeString(out, roomId);
+            writeString(out, fromId);
+            writeString(out, channel);
+            out.writeInt(message == null ? 0 : message.length);
+            if (message != null && message.length > 0) {
+                out.write(message);
+            }
+            return baos.toByteArray();
+        } catch (Exception e) {
+            return new byte[0];
+        }
+    }
+}
+
+/**
+ * 房间类。
+ */
+private static final class Room {
+    private final String id;
+    private final String networkName;
+    private final String networkSecret;
+    private final Object lock = new Object();
+    private final ConcurrentHashMap<String, InetSocketAddress> members = new ConcurrentHashMap<>();
+    private final long createdAtMillis = System.currentTimeMillis();
+    private final int maxMembers;
+    private volatile String name;
+    private volatile boolean open;
+    private volatile String hostId;
+    private volatile byte[] meta;
+
+    /**
+     * 构造函数。
+     *
+     * @param id 房间 ID
+     * @param networkName 网络名称
+     * @param networkSecret 网络密钥
+     * @param name 房间名称
+     * @param maxMembers 最大成员数
+     * @param open 是否开放
+     * @param hostId 房主 ID
+     */
+    private Room(String id, String networkName, String networkSecret, String name, int maxMembers, boolean open, String hostId) {
+        this.id = id;
+        this.networkName = networkName;
+        this.networkSecret = networkSecret;
+        this.name = name;
+        this.maxMembers = maxMembers;
+        this.open = open;
+        this.hostId = hostId;
+    }
+}
 }

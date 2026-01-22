@@ -208,8 +208,8 @@ public class StartupScreen extends EnderBaseScreen {
     private void launchAndConnect(Path exePath, Path workDir) throws Exception {
         updateStatus("正在初始化...", 0.95);
 
-        // 确保 EnderCore 环境已准备就绪（文件已下载）
-        // 实际的 EasyTier 启动将在加入/创建房间时进行
+        
+        
 
         updateStatus("初始化完成", 1.0);
         
@@ -217,9 +217,9 @@ public class StartupScreen extends EnderBaseScreen {
         if (port == -1) {
             throw new RuntimeException("无法找到可用端口");
         }
-        EnderApiClient.setPort(port); // 标记服务就绪
+        EnderApiClient.setPort(port); 
 
-        // EnderApiClient.checkHealth().join();
+        
 
         delay(500).thenRun(() -> this.minecraft.execute(this::onStartupSuccess));
     }
