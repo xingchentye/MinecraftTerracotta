@@ -87,6 +87,7 @@ public class EnderDashboard extends EnderBaseScreen {
     private JsonArray backendVersions = new JsonArray();
     private boolean roomStateDirty = false;
     private long lastPushTime = 0;
+    private PlayerListWidget playerListWidget;
 
     public enum ViewMode {
         FULL,
@@ -131,8 +132,8 @@ public class EnderDashboard extends EnderBaseScreen {
             if (clipboard != null) {
                 clipboard = clipboard.trim();
                 if (!clipboard.isEmpty() && !clipboard.equals(lastClipboard)) {
-                    // Match standard 4-part room code: XXXX-XXXX-XXXX-XXXX
-                    if (clipboard.matches("^[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$")) {
+                    // Match standard 4-part room code: U/XXXX-XXXX-XXXX-XXXX
+                    if (clipboard.matches("^U/[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$")) {
                         lastClipboard = clipboard;
                         String finalClipboard = clipboard;
                         this.client.execute(() -> this.client.setScreen(new JoinScreen(this, finalClipboard)));
@@ -145,6 +146,27 @@ public class EnderDashboard extends EnderBaseScreen {
 
     @Override
     protected void initContent() {
+        // Fix: Sync static UI state with actual backend state on init
+        EnderApiClient.State realState = EnderApiClient.getCurrentState();
+        if (realState == EnderApiClient.State.IDLE) {
+            wasConnected = false;
+            lastStateJson = null;
+        } else if (realState == EnderApiClient.State.HOSTING || realState == EnderApiClient.State.JOINING) {
+            wasConnected = true;
+            // If the cached JSON contradicts the real state, clear it to force a refresh
+            if (lastStateJson != null && lastStateJson.has("state")) {
+                String cachedState = lastStateJson.get("state").getAsString();
+                boolean cachedIsHost = "host-ok".equals(cachedState);
+                boolean realIsHost = (realState == EnderApiClient.State.HOSTING);
+                if (cachedIsHost != realIsHost) {
+                    lastStateJson = null;
+                }
+            } else {
+                lastStateJson = null;
+            }
+        }
+
+        this.playerListWidget = null;
         checkClipboardAndAutoJoin();
 
         if (lastStateJson != null) {
@@ -234,6 +256,10 @@ public class EnderDashboard extends EnderBaseScreen {
                 isHost = "host-ok".equals(state);
                 isStarting = "host-starting".equals(state) || "guest-starting".equals(state);
             }
+        } else {
+            EnderApiClient.State state = EnderApiClient.getCurrentState();
+            isHost = (state == EnderApiClient.State.HOSTING);
+            isStarting = (state == EnderApiClient.State.HOSTING_STARTING || state == EnderApiClient.State.JOINING_STARTING);
         }
         
         if (isStarting) {
@@ -271,15 +297,7 @@ public class EnderDashboard extends EnderBaseScreen {
     }
 
     private void initGuestConnectedContent() {
-        DirectionalLayoutWidget content = DirectionalLayoutWidget.vertical().spacing(10);
-        content.getMainPositioner().alignHorizontalCenter();
-
-        content.add(new TextWidget(Text.translatable("ender.dashboard.player_list"), this.textRenderer));
-
-        addPlayerListToLayout(content);
-
-        this.layout.addBody(content);
-
+        // Footer
         DirectionalLayoutWidget footerLayout = DirectionalLayoutWidget.horizontal().spacing(10);
 
         footerLayout.add(net.minecraft.client.gui.widget.ButtonWidget.builder(
@@ -299,6 +317,43 @@ public class EnderDashboard extends EnderBaseScreen {
         ).width(80).build());
 
         this.layout.addFooter(footerLayout);
+
+        // Manual Body Layout
+        int headerHeight = this.layout.getHeaderHeight() + 10;
+        int footerHeight = this.layout.getFooterHeight() + 10;
+        
+        // Title
+        int titleY = headerHeight;
+        Text title = Text.translatable("ender.dashboard.player_list");
+        TextWidget titleWidget = new TextWidget(0, titleY, this.width, 20, title, this.textRenderer);
+        titleWidget.alignCenter();
+        this.addDrawableChild(titleWidget);
+
+        // List
+        int listTop = titleY + 25;
+        int listBottom = this.height - footerHeight - 30;
+        int listWidth = 300;
+        int listX = (this.width - listWidth) / 2;
+        
+        PlayerListWidget listWidget = new PlayerListWidget(this.client, listWidth, listBottom - listTop, listTop, 24);
+        listWidget.setX(listX);
+        listWidget.updateEntries(lastStateJson);
+        this.playerListWidget = listWidget;
+        this.addDrawableChild(listWidget);
+
+        net.minecraft.client.gui.widget.ButtonWidget joinGameBtn = net.minecraft.client.gui.widget.ButtonWidget.builder(
+                Text.literal("加入游戏"),
+                b -> {
+                    String ip = EnderApiClient.getHostIp();
+                    if (ip != null) {
+                        int port = EnderApiClient.getRemoteMcPort();
+                        ServerInfo serverInfo = new ServerInfo("Ender Room", ip + ":" + port, ServerInfo.ServerType.OTHER);
+                        ConnectScreen.connect(this, this.client, ServerAddress.parse(serverInfo.address), serverInfo, false, null);
+                    }
+                }
+        ).width(200).build();
+        joinGameBtn.setPosition((this.width - 200) / 2, listBottom + 5);
+        this.addDrawableChild(joinGameBtn);
     }
 
     private void addPlayerListToLayout(DirectionalLayoutWidget layout) {
@@ -487,12 +542,34 @@ public class EnderDashboard extends EnderBaseScreen {
             String state = "";
             if (json.has("state")) {
                 state = json.get("state").getAsString();
+            } else if (json.has("status")) {
+                String status = json.get("status").getAsString();
+                if ("IDLE".equals(status)) {
+                    state = "idle";
+                } else if ("ERROR".equals(status)) {
+                    state = "error";
+                } else if ("HOSTING_STARTING".equals(status)) {
+                    state = "host-starting";
+                } else if ("JOINING_STARTING".equals(status)) {
+                    state = "guest-starting";
+                } else if ("HOSTING".equals(status)) {
+                    state = "host-ok";
+                } else if ("JOINING".equals(status)) {
+                    state = "guest-ok";
+                }
             }
             boolean isConnected = "host-ok".equals(state) || "guest-ok".equals(state);
 
             boolean needsInit = wasConnected != isConnected || this.isUiConnected != isConnected;
             if (isConnected) {
                 lastStateJson = json;
+                if (this.client != null) {
+                    this.client.execute(() -> {
+                        if (this.playerListWidget != null) {
+                            this.playerListWidget.updateEntries(lastStateJson);
+                        }
+                    });
+                }
             } else {
                 lastStateJson = null;
             }
@@ -530,6 +607,18 @@ public class EnderDashboard extends EnderBaseScreen {
                 case "waiting":
                     displayKey = "ender.state.waiting";
                     break;
+                case "error":
+                    if (json.has("error")) {
+                        String err = json.get("error").getAsString();
+                        this.backendDisplay = Text.literal("错误: " + err);
+                        this.backendPrefixed = false;
+                        displayKey = null;
+                    } else {
+                        this.backendDisplay = Text.literal("错误");
+                        this.backendPrefixed = true;
+                        displayKey = null;
+                    }
+                    break;
                 default:
                     displayKey = null;
                     break;
@@ -538,7 +627,7 @@ public class EnderDashboard extends EnderBaseScreen {
             if (displayKey != null) {
                 this.backendDisplay = Text.translatable(displayKey);
                 this.backendPrefixed = true;
-            } else {
+            } else if (!"error".equals(state)) {
                 this.backendDisplay = Text.literal(state);
                 this.backendPrefixed = true;
             }
@@ -1444,6 +1533,14 @@ public class EnderDashboard extends EnderBaseScreen {
         return null;
     }
 
+    private int parseIntSafe(String value, int fallback) {
+        try {
+            return Integer.parseInt(value.trim());
+        } catch (Exception ignored) {
+            return fallback;
+        }
+    }
+
     private void addNameToArray(JsonArray array, String name) {
         if (array == null || name == null) {
             return;
@@ -1636,11 +1733,102 @@ public class EnderDashboard extends EnderBaseScreen {
         }
     }
 
-    private int parseIntSafe(String value, int fallback) {
-        try {
-            return Integer.parseInt(value.trim());
-        } catch (Exception ignored) {
-            return fallback;
+    private class PlayerListWidget extends ElementListWidget<PlayerListWidget.Entry> {
+        public PlayerListWidget(MinecraftClient client, int width, int height, int top, int itemHeight) {
+            super(client, width, height, top, itemHeight);
+            this.centerListVertically = false;
+        }
+
+        public void updateEntries(JsonObject state) {
+            this.clearEntries();
+            if (state == null) return;
+            
+            if (state.has("profiles")) {
+                try {
+                    JsonArray profiles = state.getAsJsonArray("profiles");
+                    for (JsonElement p : profiles) {
+                        JsonObject profile = p.getAsJsonObject();
+                        String name = profile.get("name").getAsString();
+                        String kind = profile.has("kind") ? profile.get("kind").getAsString() : "";
+                        String vendor = profile.has("vendor") ? profile.get("vendor").getAsString() : "";
+                        
+                        String status = "[已连接]";
+                        if ("EasyTier".equals(vendor)) {
+                            status = "[连接中]";
+                        }
+                        
+                        this.addEntry(new Entry(name, kind, status));
+                    }
+                } catch (Exception ignored) {}
+            } else if (state.has("players")) {
+                try {
+                    JsonArray players = state.getAsJsonArray("players");
+                    for (JsonElement p : players) {
+                        this.addEntry(new Entry(p.getAsString(), "", "[已连接]"));
+                    }
+                } catch (Exception ignored) {}
+            }
+        }
+
+        @Override
+        public int getRowWidth() {
+            return 260;
+        }
+
+        @Override
+        protected int getScrollbarX() {
+            return this.getX() + this.width - 6;
+        }
+
+        public class Entry extends ElementListWidget.Entry<Entry> {
+            private final String name;
+            private final String kind;
+            private final String status;
+
+            public Entry(String name, String kind, String status) {
+                this.name = name;
+                this.kind = kind;
+                this.status = status;
+            }
+
+            @Override
+            public void render(DrawContext context, int index, int top, int left, int width, int height, int mouseX, int mouseY, boolean hovered, float partialTick) {
+                int color = 0xFFFFFF;
+                String display = name;
+                String typeLabel = "[成员]";
+                if ("HOST".equals(kind)) {
+                    typeLabel = "[房主]";
+                    color = 0xFFFF55;
+                }
+                
+                int maxNameWidth = 125;
+                if (textRenderer.getWidth(display) > maxNameWidth) {
+                    display = textRenderer.trimToWidth(display, maxNameWidth - 10) + "...";
+                }
+                
+                context.drawText(textRenderer, display, left + 10, top + (height - 8) / 2, color, false);
+                context.drawText(textRenderer, Text.literal(typeLabel).formatted(net.minecraft.util.Formatting.GRAY), left + 140, top + (height - 8) / 2, 0xFFFFFF, false);
+                
+                int statusColor = 0x55FF55;
+                 if ("[未连接]".equals(status)) {
+                     statusColor = 0xFF5555;
+                 } else if ("[连接中]".equals(status)) {
+                     statusColor = 0xFFFF55;
+                 }
+                 if (status != null) {
+                     context.drawText(textRenderer, Text.literal(status).formatted(net.minecraft.util.Formatting.GRAY), left + 200, top + (height - 8) / 2, statusColor, false);
+                 }
+            }
+
+            @Override
+            public List<? extends Element> children() {
+                return ImmutableList.of();
+            }
+
+            @Override
+            public List<? extends Selectable> selectableChildren() {
+                return ImmutableList.of();
+            }
         }
     }
 }

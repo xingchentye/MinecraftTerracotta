@@ -40,7 +40,7 @@ public class JoinScreen extends EnderBaseScreen {
 
         this.roomCodeBox = new TextFieldWidget(this.textRenderer, 200, 20, Text.translatable("ender.join.input.label"));
         this.roomCodeBox.setMaxLength(128);
-        this.roomCodeBox.setPlaceholder(Text.literal("XXXX-XXXX-XXXX-XXXX"));
+        this.roomCodeBox.setPlaceholder(Text.literal("U/XXXX-XXXX-XXXX-XXXX"));
         contentLayout.add(this.roomCodeBox);
 
         this.joinBtn = ButtonWidget.builder(Text.translatable("ender.common.join"), button -> joinRoom())
@@ -101,7 +101,7 @@ public class JoinScreen extends EnderBaseScreen {
             if (success) {
                 statusText = Text.translatable("ender.join.status.success");
             } else {
-                statusText = Text.translatable("ender.join.status.failed").append(Text.literal("Unknown error"));
+                statusText = Text.translatable("ender.join.status.failed").append(Text.literal(EnderApiClient.getLastError()));
                 isWorking = false;
                 joinBtn.active = true;
             }

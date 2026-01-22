@@ -94,6 +94,7 @@ public class EnderDashboard extends EnderBaseScreen {
     private final List<AbstractWidget> roomPageWidgets = new ArrayList<>();
     private final List<Button> roomPageButtons = new ArrayList<>();
     private RoomPagePanel roomPagePanel;
+    private PlayerListScrollWidget playerListWidget;
 
     public enum ViewMode {
         FULL,
@@ -146,8 +147,40 @@ public class EnderDashboard extends EnderBaseScreen {
             this.setY(top);
         }
         
+        public void updateEntries(JsonObject state) {
+            this.clearEntries();
+            if (state == null) return;
+            
+            if (state.has("profiles")) {
+                try {
+                    JsonArray profiles = state.getAsJsonArray("profiles");
+                    for (JsonElement p : profiles) {
+                        JsonObject profile = p.getAsJsonObject();
+                        String name = profile.get("name").getAsString();
+                        String kind = profile.has("kind") ? profile.get("kind").getAsString() : "";
+                        String vendor = profile.has("vendor") ? profile.get("vendor").getAsString() : "";
+                        String type = "HOST".equals(kind) ? "[房主]" : "[成员]";
+                        
+                        String status = "[已连接]";
+                        if ("EasyTier".equals(vendor)) {
+                            status = "[连接中]";
+                        }
+                        
+                        this.addEntry(new Entry(name, type, null, status));
+                    }
+                } catch (Exception ignored) {}
+            } else if (state.has("players")) {
+                try {
+                    JsonArray players = state.getAsJsonArray("players");
+                    for (JsonElement p : players) {
+                        this.addEntry(new Entry(p.getAsString(), "[成员]", null, "[已连接]"));
+                    }
+                } catch (Exception ignored) {}
+            }
+        }
+
         public void addItem(String name, String type, Button.OnPress onRemove) {
-            this.addEntry(new Entry(name, type, onRemove));
+            this.addEntry(new Entry(name, type, onRemove, "[已连接]"));
         }
         
         @Override
@@ -163,27 +196,56 @@ public class EnderDashboard extends EnderBaseScreen {
         public class Entry extends ObjectSelectionList.Entry<Entry> {
              private final String name;
              private final String type;
+             private final String status;
              private final Button removeBtn;
 
-             public Entry(String name, String type, Button.OnPress onRemove) {
+             public Entry(String name, String type, Button.OnPress onRemove, String status) {
                  this.name = name;
                  this.type = type;
-                 this.removeBtn = Button.builder(Component.literal("移除"), onRemove).width(40).build();
+                 this.status = status;
+                 if (onRemove != null) {
+                     this.removeBtn = Button.builder(Component.literal("移除"), onRemove).width(40).build();
+                 } else {
+                     this.removeBtn = null;
+                 }
              }
 
              @Override
              public void render(net.minecraft.client.gui.GuiGraphics guiGraphics, int index, int y, int x, int entryWidth, int entryHeight, int mouseX, int mouseY, boolean hovered, float partialTick) {
-                 guiGraphics.drawString(EnderDashboard.this.font, name, x + 10, y + (entryHeight - 8) / 2, 0xFFFFFF);
+                 int color = 0xFFFFFF;
+                 if ("[房主]".equals(type)) {
+                     color = 0xFFFF55;
+                 }
+                 
+                 String displayName = name;
+                 int maxNameWidth = 125;
+                 if (EnderDashboard.this.font.width(displayName) > maxNameWidth) {
+                     displayName = EnderDashboard.this.font.plainSubstrByWidth(displayName, maxNameWidth - 10) + "...";
+                 }
+                 
+                 guiGraphics.drawString(EnderDashboard.this.font, displayName, x + 10, y + (entryHeight - 8) / 2, color);
                  guiGraphics.drawString(EnderDashboard.this.font, Component.literal(type).withStyle(net.minecraft.ChatFormatting.GRAY), x + 140, y + (entryHeight - 8) / 2, 0xFFFFFF);
                  
-                 this.removeBtn.setX(x + 240);
-                 this.removeBtn.setY(y + (entryHeight - 20) / 2);
-                 this.removeBtn.render(guiGraphics, mouseX, mouseY, partialTick);
+                 int statusColor = 0x55FF55; // Green
+                 if ("[未连接]".equals(status)) {
+                     statusColor = 0xFF5555; // Red
+                 } else if ("[连接中]".equals(status)) {
+                     statusColor = 0xFFFF55; // Yellow
+                 }
+                 if (status != null) {
+                    guiGraphics.drawString(EnderDashboard.this.font, Component.literal(status).withStyle(net.minecraft.ChatFormatting.GRAY), x + 200, y + (entryHeight - 8) / 2, statusColor);
+                 }
+                 
+                 if (this.removeBtn != null) {
+                     this.removeBtn.setX(x + 240);
+                     this.removeBtn.setY(y + (entryHeight - 20) / 2);
+                     this.removeBtn.render(guiGraphics, mouseX, mouseY, partialTick);
+                 }
              }
 
              @Override
              public boolean mouseClicked(double mouseX, double mouseY, int button) {
-                 if (this.removeBtn.mouseClicked(mouseX, mouseY, button)) {
+                 if (this.removeBtn != null && this.removeBtn.mouseClicked(mouseX, mouseY, button)) {
                      return true;
                  }
                  return false;
@@ -231,8 +293,8 @@ public class EnderDashboard extends EnderBaseScreen {
             if (clipboard != null) {
                 clipboard = clipboard.trim();
                 if (!clipboard.isEmpty() && !clipboard.equals(lastClipboard)) {
-                    // Match standard 4-part room code: XXXX-XXXX-XXXX-XXXX
-                    if (clipboard.matches("^[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$")) {
+                    // Match standard 4-part room code: U/XXXX-XXXX-XXXX-XXXX
+                    if (clipboard.matches("^U/[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$")) {
                         lastClipboard = clipboard;
                         String finalClipboard = clipboard;
                         this.minecraft.execute(() -> {
@@ -247,6 +309,27 @@ public class EnderDashboard extends EnderBaseScreen {
 
     @Override
     protected void initContent() {
+        // Fix: Sync static UI state with actual backend state on init
+        EnderApiClient.State realState = EnderApiClient.getCurrentState();
+        if (realState == EnderApiClient.State.IDLE) {
+            wasConnected = false;
+            lastStateJson = null;
+        } else if (realState == EnderApiClient.State.HOSTING || realState == EnderApiClient.State.JOINING) {
+            wasConnected = true;
+            // If the cached JSON contradicts the real state, clear it to force a refresh
+            if (lastStateJson != null && lastStateJson.has("state")) {
+                String cachedState = lastStateJson.get("state").getAsString();
+                boolean cachedIsHost = "host-ok".equals(cachedState);
+                boolean realIsHost = (realState == EnderApiClient.State.HOSTING);
+                if (cachedIsHost != realIsHost) {
+                    lastStateJson = null;
+                }
+            } else {
+                lastStateJson = null;
+            }
+        }
+
+        this.playerListWidget = null;
         if (lastStateJson != null) {
             if (lastStateJson.has("state")) {
                 String s = lastStateJson.get("state").getAsString();
@@ -326,6 +409,10 @@ public class EnderDashboard extends EnderBaseScreen {
                 isHost = "host-ok".equals(state);
                 isStarting = "host-starting".equals(state) || "guest-starting".equals(state);
             }
+        } else {
+            EnderApiClient.State state = EnderApiClient.getCurrentState();
+            isHost = (state == EnderApiClient.State.HOSTING);
+            isStarting = (state == EnderApiClient.State.HOSTING_STARTING || state == EnderApiClient.State.JOINING_STARTING);
         }
         
         if (isStarting) {
@@ -357,24 +444,7 @@ public class EnderDashboard extends EnderBaseScreen {
     }
 
     private void initGuestConnectedContent() {
-        LinearLayout content = LinearLayout.vertical().spacing(10);
-        content.defaultCellSetting().alignHorizontallyCenter();
-        
-        content.addChild(new StringWidget(Component.literal(" 房间玩家列表 "), this.font));
-        
-        int playerCount = 0;
-        if (lastStateJson != null) {
-            if (lastStateJson.has("profiles")) playerCount = lastStateJson.getAsJsonArray("profiles").size();
-            else if (lastStateJson.has("players")) playerCount = lastStateJson.getAsJsonArray("players").size();
-        }
-        content.addChild(new StringWidget(Component.literal("在线人数: " + playerCount), this.font));
-        
-        content.addChild(Button.builder(Component.literal("详细名单"), b -> {
-            this.minecraft.setScreen(new RoomListsScreen(this));
-        }).width(120).build());
-        
-        this.layout.addToContents(content);
-        
+        // Footer
         LinearLayout footerLayout = LinearLayout.horizontal().spacing(10);
         
         footerLayout.addChild(Button.builder(Component.literal("断开连接"), b -> {
@@ -388,6 +458,36 @@ public class EnderDashboard extends EnderBaseScreen {
         footerLayout.addChild(Button.builder(Component.literal("返回"), b -> this.onClose()).width(80).build());
         
         this.layout.addToFooter(footerLayout);
+
+        // Manual Body Layout
+        int headerHeight = this.layout.getHeaderHeight() + 10;
+        int footerHeight = this.layout.getFooterHeight() + 10;
+        
+        int titleY = headerHeight;
+        StringWidget title = new StringWidget(0, titleY, this.width, 20, Component.literal("房间玩家列表"), this.font);
+        title.alignCenter();
+        this.addRenderableWidget(title);
+        
+        int listTop = titleY + 25;
+        int listBottom = this.height - footerHeight - 30;
+        int listWidth = 300;
+        int listX = (this.width - listWidth) / 2;
+        
+        PlayerListScrollWidget list = new PlayerListScrollWidget(this.minecraft, listWidth, listBottom - listTop, listTop, listBottom);
+        list.updateWidgetSize(listWidth, listBottom - listTop, listTop, listBottom, listX);
+        list.updateEntries(lastStateJson);
+        this.playerListWidget = list;
+        this.addRenderableWidget(list);
+
+        Button joinGameBtn = Button.builder(Component.literal("加入游戏"), b -> {
+            String ip = EnderApiClient.getHostIp();
+            if (ip != null) {
+                int port = EnderApiClient.getRemoteMcPort();
+                this.connectToServer(ip + ":" + port);
+            }
+        }).width(200).build();
+        joinGameBtn.setPosition((this.width - 200) / 2, listBottom + 5);
+        this.addRenderableWidget(joinGameBtn);
     }
 
     private void addPlayerListToLayout(LinearLayout layout) {
@@ -518,12 +618,34 @@ public class EnderDashboard extends EnderBaseScreen {
                     String state = "";
                     if (json.has("state")) {
                         state = json.get("state").getAsString();
+                    } else if (json.has("status")) {
+                        String status = json.get("status").getAsString();
+                        if ("IDLE".equals(status)) {
+                            state = "idle";
+                        } else if ("ERROR".equals(status)) {
+                            state = "error";
+                        } else if ("HOSTING_STARTING".equals(status)) {
+                            state = "host-starting";
+                        } else if ("JOINING_STARTING".equals(status)) {
+                            state = "guest-starting";
+                        } else if ("HOSTING".equals(status)) {
+                            state = "host-ok";
+                        } else if ("JOINING".equals(status)) {
+                            state = "guest-ok";
+                        }
                     }
                     boolean isConnected = "host-ok".equals(state) || "guest-ok".equals(state);
 
                     boolean needsInit = wasConnected != isConnected || this.isUiConnected != isConnected;
                     if (isConnected) {
                         lastStateJson = json;
+                        if (this.minecraft != null) {
+                            this.minecraft.execute(() -> {
+                                if (this.playerListWidget != null) {
+                                    this.playerListWidget.updateEntries(lastStateJson);
+                                }
+                            });
+                        }
                     } else {
                         lastStateJson = null;
                     }
@@ -545,12 +667,21 @@ public class EnderDashboard extends EnderBaseScreen {
                         case "guest-connecting": displayKey = "ender.state.guest_connecting"; break;
                         case "guest-ok": displayKey = "ender.state.connected"; break;
                         case "waiting": displayKey = "ender.state.waiting"; break;
+                        case "error":
+                            if (json.has("error")) {
+                                this.backendState = "错误: " + json.get("error").getAsString();
+                                displayKey = null;
+                            } else {
+                                this.backendState = "错误";
+                                displayKey = null;
+                            }
+                            break;
                         default: displayKey = null; break;
                     }
                     
                     if (displayKey != null) {
                         this.backendState = Component.translatable(displayKey).getString();
-                    } else {
+                    } else if (!"error".equals(state)) {
                         this.backendState = state;
                     }
 

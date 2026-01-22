@@ -58,7 +58,8 @@ public class EasyTierConfig {
         // Add default peers from user example
         peers.add("tcp://public.easytier.top:11010");
         peers.add("tcp://public2.easytier.cn:54321");
-        // peers.add("https://etnode.zkitefly.eu.org/node1");
+        peers.add("tcp://8.148.29.206:11010");
+        peers.add("tcp://39.108.52.138:11010");
         // peers.add("https://etnode.zkitefly.eu.org/node2");
         
         // Add default listeners

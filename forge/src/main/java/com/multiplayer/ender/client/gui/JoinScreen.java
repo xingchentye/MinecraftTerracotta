@@ -40,7 +40,7 @@ public class JoinScreen extends EnderBaseScreen {
 
         this.roomCodeBox = new EditBox(this.font, 0, 0, 200, 20, Component.translatable("ender.join.input.label"));
         this.roomCodeBox.setMaxLength(128);
-        this.roomCodeBox.setHint(Component.literal("XXXX-XXXX-XXXX-XXXX"));
+        this.roomCodeBox.setHint(Component.literal("U/XXXX-XXXX-XXXX-XXXX"));
         contentLayout.addChild(this.roomCodeBox);
 
         this.joinBtn = Button.builder(Component.translatable("ender.common.join"), button -> {
@@ -96,7 +96,7 @@ public class JoinScreen extends EnderBaseScreen {
             if (success) {
                 statusText = Component.translatable("ender.join.status.success");
             } else {
-                statusText = Component.translatable("ender.join.status.failed").append("Unknown error");
+                statusText = Component.translatable("ender.join.status.failed").append(EnderApiClient.getLastError());
                 isWorking = false;
                 joinBtn.active = true;
             }

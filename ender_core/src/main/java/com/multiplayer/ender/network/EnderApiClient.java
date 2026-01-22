@@ -48,6 +48,7 @@ public class EnderApiClient {
     private static volatile InetSocketAddress scaffoldingRemote;
     private static volatile int scaffoldingPort = DEFAULT_SCAFFOLDING_PORT;
     private static volatile int hostedMcPort = 25565;
+    private static volatile int remoteMcPort = 25565;
     private static volatile String localPlayerName = "";
     private static volatile String lastRoomCode = "";
     private static final Logger LOGGER = LoggerFactory.getLogger(EnderApiClient.class);
@@ -154,6 +155,18 @@ public class EnderApiClient {
 
     public static int getPort() {
         return dynamicPort > 0 ? dynamicPort : 25566;
+    }
+
+    public static int getRemoteMcPort() {
+        return remoteMcPort;
+    }
+
+    public static String getHostIp() {
+        InetSocketAddress remote = scaffoldingRemote;
+        if (remote != null && remote.getAddress() != null) {
+            return remote.getAddress().getHostAddress();
+        }
+        return null;
     }
 
     public static CompletableFuture<String> getMeta() {
@@ -277,9 +290,10 @@ public class EnderApiClient {
                 String name = "";
                 String secret = "";
                 
-                // Parse room code format: PART1-PART2-PART3-PART4
-                if (room.matches("^[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$")) {
-                    String[] parts = room.split("-");
+                // Parse room code format: U/PART1-PART2-PART3-PART4
+                if (room.matches("^U/[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$")) {
+                    String raw = room.substring(2);
+                    String[] parts = raw.split("-");
                     name = "scaffolding-mc-" + parts[0] + "-" + parts[1];
                     secret = parts[2] + "-" + parts[3];
                 } else {
@@ -302,6 +316,33 @@ public class EnderApiClient {
                 
                 // Wait for service to start
                 Thread.sleep(1000);
+
+                // Wait for host discovery
+                boolean hostFound = false;
+                boolean hostSeenButNoIp = false;
+                for (int i = 0; i < 30; i++) {
+                    ScanResult result = scanForScaffoldingRemote();
+                    if (result.address != null) {
+                        hostFound = true;
+                        break;
+                    }
+                    if (result.hostSeen) {
+                        hostSeenButNoIp = true;
+                    }
+                    Thread.sleep(1000);
+                }
+
+                if (!hostFound) {
+                    LOGGER.warn("Room host not found for room: {}", room);
+                    manager.stop();
+                    currentState = State.ERROR;
+                    if (hostSeenButNoIp) {
+                        lastError = "Host found but unreachable (Route Error)";
+                    } else {
+                        lastError = "Room not found or host offline";
+                    }
+                    return false;
+                }
 
                 // Start LAN broadcast
                 if (hasDynamicPort()) {
@@ -328,6 +369,10 @@ public class EnderApiClient {
 
     public static String getLastRoomCode() {
         return lastRoomCode;
+    }
+
+    public static String getLastError() {
+        return lastError;
     }
 
     public static CompletableFuture<String> getState() {
@@ -452,7 +497,7 @@ public class EnderApiClient {
                 String p3 = generateRandomString(4);
                 String p4 = generateRandomString(4);
                 
-                String roomCode = p1 + "-" + p2 + "-" + p3 + "-" + p4;
+                String roomCode = "U/" + p1 + "-" + p2 + "-" + p3 + "-" + p4;
                 String networkName = "scaffolding-mc-" + p1 + "-" + p2;
                 String networkSecret = p3 + "-" + p4;
 
@@ -562,7 +607,7 @@ public class EnderApiClient {
             t.setDaemon(true);
             return t;
         });
-        scaffoldingClientScheduler.scheduleWithFixedDelay(EnderApiClient::pollScaffoldingServer, 2, 5, TimeUnit.SECONDS);
+        scaffoldingClientScheduler.scheduleWithFixedDelay(EnderApiClient::pollScaffoldingServer, 0, 5, TimeUnit.SECONDS);
     }
 
     private static void stopScaffoldingClient() {
@@ -585,15 +630,23 @@ public class EnderApiClient {
         if (currentState != State.JOINING) {
             return;
         }
+        
+        // Update from EasyTier first to ensure we have a list even if WebSocket fails
+        updateProfilesFromEasyTier();
+
+        // LOGGER.debug("Polling scaffolding server...");
         InetSocketAddress remote = findScaffoldingRemote();
         if (remote == null) {
+            LOGGER.debug("Scaffolding remote not found during poll");
             return;
         }
         if (scaffoldingRemote == null || !scaffoldingRemote.equals(remote) || scaffoldingClient == null || !scaffoldingClient.isConnected()) {
+            LOGGER.info("Connecting to scaffolding remote: {}", remote);
             connectScaffolding(remote);
         }
         CoreWebSocketClient client = scaffoldingClient;
         if (client == null || !client.isConnected()) {
+            LOGGER.warn("Scaffolding client not connected after attempt");
             return;
         }
         try {
@@ -601,24 +654,88 @@ public class EnderApiClient {
             ping.addProperty("machine_id", LOCAL_MACHINE_ID);
             ping.addProperty("name", localPlayerName);
             ping.addProperty("vendor", VENDOR);
-            client.sendSync("c:player_ping", ping.toString().getBytes(StandardCharsets.UTF_8), Duration.ofSeconds(4));
-            CoreResponse resp = client.sendSync("c:player_profiles_list", new byte[0], Duration.ofSeconds(4));
+            // LOGGER.debug("Sending ping: {}", ping);
+            client.sendSync("c:player_ping", ping.toString().getBytes(StandardCharsets.UTF_8), Duration.ofSeconds(10));
+            CoreResponse resp = client.sendSync("c:player_profiles_list", new byte[0], Duration.ofSeconds(10));
             if (!resp.isOk()) {
+                LOGGER.warn("Failed to fetch profiles: status={}", resp.status());
                 return;
             }
             String json = new String(resp.payload(), StandardCharsets.UTF_8);
+            // LOGGER.debug("Got profiles: {}", json);
             JsonArray array = GSON.fromJson(json, JsonArray.class);
             if (array != null) {
                 updateProfilesFromArray(array);
             }
 
             // Sync room state
-            CoreResponse stateResp = client.sendSync("c:room_state_sync", new byte[0], Duration.ofSeconds(4));
+            CoreResponse stateResp = client.sendSync("c:room_state_sync", new byte[0], Duration.ofSeconds(10));
             if (stateResp.isOk()) {
                 String stateJson = new String(stateResp.payload(), StandardCharsets.UTF_8);
                 updateRoomManagementState(stateJson);
+            } else {
+                LOGGER.warn("Failed to sync room state: status={}", stateResp.status());
             }
-        } catch (Exception ignored) {
+
+            // Fetch server port
+            CoreResponse portResp = client.sendSync("c:server_port", new byte[0], Duration.ofSeconds(10));
+            if (portResp.isOk()) {
+                try {
+                    java.io.DataInputStream in = new java.io.DataInputStream(new java.io.ByteArrayInputStream(portResp.payload()));
+                    remoteMcPort = in.readUnsignedShort();
+                } catch (Exception ignored) {}
+            }
+        } catch (Exception e) {
+            LOGGER.error("Error polling scaffolding server", e);
+        }
+    }
+
+    private static void updateProfilesFromEasyTier() {
+        try {
+            Map<String, String> hostnames = EasyTierManager.getInstance().getPeerHostnames();
+            for (Map.Entry<String, String> entry : hostnames.entrySet()) {
+                String id = entry.getKey();
+                String hostname = entry.getValue();
+                if (hostname == null || hostname.isBlank()) continue;
+                
+                // Filter out public infrastructure nodes (relay servers)
+                // They often have specific naming patterns or IDs, but based on user feedback
+                // we should be stricter.
+                // Typical EasyTier public nodes might be named "PublicServer_..." or similar.
+                if (hostname.startsWith("PublicServer_") || hostname.contains(".easytier.")) {
+                    continue;
+                }
+
+                String kind = "GUEST";
+                String name = hostname;
+                if (hostname.startsWith(SCAFFOLDING_PREFIX)) {
+                    kind = "HOST";
+                }
+                
+                boolean found = false;
+                for (Profile p : profiles) {
+                    if (p.machineId.equals(id)) {
+                        if ("GUEST".equals(p.kind)) {
+                            p.name = name;
+                            profileLastSeen.put(id, System.currentTimeMillis());
+                        } else if ("HOST".equals(p.kind)) {
+                             profileLastSeen.put(id, System.currentTimeMillis());
+                        }
+                        found = true;
+                        break;
+                    }
+                }
+                
+                if (!found) {
+                    // Try to get real name if possible, otherwise use hostname but clean it up
+                    String displayName = name;
+                    
+                    profiles.add(new Profile(id, displayName, "EasyTier", kind));
+                    profileLastSeen.put(id, System.currentTimeMillis());
+                }
+            }
+        } catch (Exception e) {
+            LOGGER.warn("Failed to update profiles from EasyTier", e);
         }
     }
 
@@ -630,16 +747,19 @@ public class EnderApiClient {
         } catch (Exception ignored) {
         }
         CoreWebSocketClient client = CoreComm.newClient(CoreWebSocketConfig.builder()
-                .connectTimeout(Duration.ofSeconds(3))
-                .requestTimeout(Duration.ofSeconds(4))
+                .connectTimeout(Duration.ofSeconds(10))
+                .requestTimeout(Duration.ofSeconds(15))
                 .heartbeatInterval(Duration.ZERO)
                 .build(), null, null);
         try {
             URI uri = URI.create("ws://" + remote.getHostString() + ":" + remote.getPort() + "/ws");
-            client.connect(uri).get(4, TimeUnit.SECONDS);
+            LOGGER.info("Attempting WebSocket connection to: {}", uri);
+            client.connect(uri).get(10, TimeUnit.SECONDS);
             scaffoldingClient = client;
             scaffoldingRemote = remote;
+            LOGGER.info("WebSocket connected successfully");
         } catch (Exception e) {
+            LOGGER.error("Failed to connect to scaffolding server: " + remote, e);
             try {
                 client.close(Duration.ofSeconds(1)).join();
             } catch (Exception ignored) {
@@ -647,7 +767,14 @@ public class EnderApiClient {
         }
     }
 
-    private static InetSocketAddress findScaffoldingRemote() {
+    private static class ScanResult {
+        InetSocketAddress address;
+        boolean hostSeen;
+        boolean ipMissing;
+    }
+
+    private static ScanResult scanForScaffoldingRemote() {
+        ScanResult result = new ScanResult();
         Map<String, String> hostnames = EasyTierManager.getInstance().getPeerHostnames();
         Map<String, String> ips = EasyTierManager.getInstance().getPeerIps();
         for (Map.Entry<String, String> entry : hostnames.entrySet()) {
@@ -656,9 +783,15 @@ public class EnderApiClient {
                 continue;
             }
             String trimmed = hostname.trim();
+            LOGGER.info("Scanning host: {} -> {}", entry.getKey(), trimmed);
             if (!trimmed.startsWith(SCAFFOLDING_PREFIX)) {
                 continue;
             }
+            
+            result.hostSeen = true;
+            // Log found host
+            LOGGER.info("Found scaffolding host: {} -> {}", entry.getKey(), trimmed);
+            
             String portStr = trimmed.substring(SCAFFOLDING_PREFIX.length());
             int port;
             try {
@@ -668,11 +801,21 @@ public class EnderApiClient {
             }
             String ip = ips.get(entry.getKey());
             if (ip == null || ip.isBlank()) {
+                // Try to get IP from peer info directly if not in ips map
+                // But EasyTierManager should handle this.
+                // For now, let's just log warning
+                result.ipMissing = true;
+                LOGGER.warn("Host found but no IP for peer: {}", entry.getKey());
                 continue;
             }
-            return new InetSocketAddress(ip, port);
+            result.address = new InetSocketAddress(ip, port);
+            return result;
         }
-        return null;
+        return result;
+    }
+
+    private static InetSocketAddress findScaffoldingRemote() {
+        return scanForScaffoldingRemote().address;
     }
 
     private static CoreResponse handlePing(CoreRequest req) {

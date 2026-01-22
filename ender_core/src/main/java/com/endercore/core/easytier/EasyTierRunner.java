@@ -269,43 +269,51 @@ public class EasyTierRunner {
 
             ProcessBuilder pb = new ProcessBuilder(
                 cliPath.toAbsolutePath().toString(), 
-                "peer", 
-                "--rpc-portal", "127.0.0.1:" + rpcPort
+                "-p", "127.0.0.1:" + rpcPort, 
+                "-o", "json",
+                "peer"
             );
             pb.redirectErrorStream(true);
             Process p = pb.start();
             
             Map<String, String> latestHostnames = new HashMap<>();
             Map<String, String> latestIps = new HashMap<>();
+            
+            StringBuilder jsonBuilder = new StringBuilder();
             try (BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream(), StandardCharsets.UTF_8))) {
                 String line;
-                // Parse table
-                // | ipv4 | hostname | ... | id | ...
-                // 1      2            10
                 while ((line = reader.readLine()) != null) {
-                    if (line.trim().startsWith("|")) {
-                        String[] parts = line.split("\\|");
-                        if (parts.length > 10) { 
-                             String ipv4 = parts[1].trim();
-                             String hostname = parts[2].trim();
-                             String id = parts[10].trim(); 
-                             
-                             if ("ipv4".equalsIgnoreCase(ipv4) && "hostname".equalsIgnoreCase(hostname) && "id".equalsIgnoreCase(id)) {
-                                 continue;
-                             }
-                             
-                             if (hostname.startsWith("-")) continue;
-
-                             if (!id.isEmpty() && !hostname.isEmpty()) {
-                                 latestHostnames.put(id, hostname);
-                             }
-                             if (!id.isEmpty() && !ipv4.isEmpty() && !ipv4.startsWith("-")) {
-                                 latestIps.put(id, ipv4);
-                             }
-                        }
-                    }
+                    jsonBuilder.append(line);
                 }
             }
+            
+            String jsonOutput = jsonBuilder.toString();
+            if (!jsonOutput.isBlank()) {
+                LOGGER.info("EasyTier CLI output: {}", jsonOutput);
+                try {
+                    com.google.gson.JsonArray peers = com.google.gson.JsonParser.parseString(jsonOutput).getAsJsonArray();
+                    for (com.google.gson.JsonElement element : peers) {
+                        if (!element.isJsonObject()) continue;
+                        com.google.gson.JsonObject peer = element.getAsJsonObject();
+                        
+                        String id = peer.has("peer_id") ? peer.get("peer_id").getAsString() : (peer.has("id") ? peer.get("id").getAsString() : "");
+                        String hostname = peer.has("hostname") ? peer.get("hostname").getAsString() : "";
+                        String ipv4 = peer.has("ipv4") ? peer.get("ipv4").getAsString() : "";
+                        
+                        if (!id.isEmpty()) {
+                            if (!hostname.isEmpty()) {
+                                latestHostnames.put(id, hostname);
+                            }
+                            if (!ipv4.isEmpty()) {
+                                latestIps.put(id, ipv4);
+                            }
+                        }
+                    }
+                } catch (Exception e) {
+                    LOGGER.warn("Failed to parse peer json: {}", e.getMessage());
+                }
+            }
+
             peerHostnames.clear();
             peerHostnames.putAll(latestHostnames);
             peerIps.clear();
