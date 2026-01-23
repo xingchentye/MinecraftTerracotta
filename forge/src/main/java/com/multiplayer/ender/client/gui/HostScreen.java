@@ -23,6 +23,7 @@ public class HostScreen extends EnderBaseScreen {
     private Button startBtn;
     private long lastStateCheck = 0;
     private long lastClickTime = 0;
+    private volatile double downloadProgress = -1.0;
     private static final Gson GSON = new Gson();
 
     public HostScreen(Screen parent) {
@@ -148,6 +149,18 @@ public class HostScreen extends EnderBaseScreen {
         if (!roomCode.isEmpty()) {
             guiGraphics.drawCenteredString(this.font, Component.translatable("ender.host.invite_code_prefix").append(roomCode), this.width / 2, textY + 20, 0x55FF55);
             guiGraphics.drawCenteredString(this.font, Component.translatable("ender.host.share_hint"), this.width / 2, textY + 35, 0xAAAAAA);
+        }
+
+        if (downloadProgress >= 0) {
+            int barWidth = 200;
+            int barHeight = 4;
+            int barX = this.width / 2 - barWidth / 2;
+            int barY = textY + 40;
+
+            guiGraphics.fill(barX, barY, barX + barWidth, barY + barHeight, 0xFF555555);
+            guiGraphics.fill(barX, barY, barX + (int) (barWidth * downloadProgress), barY + barHeight, 0xFF55FF55);
+            
+            guiGraphics.drawCenteredString(this.font, Component.literal((int)(downloadProgress * 100) + "%"), this.width / 2, barY + 8, 0xFFFFFF);
         }
     }
 }

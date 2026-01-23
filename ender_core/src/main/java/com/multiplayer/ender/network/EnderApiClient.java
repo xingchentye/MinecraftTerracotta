@@ -29,6 +29,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 
 
 import com.multiplayer.ender.logic.LanDiscovery;
@@ -647,15 +648,27 @@ public class EnderApiClient {
      * @return 包含房间代码的 CompletableFuture
      */
     public static CompletableFuture<String> startHosting(int port, String playerName) {
+        return startHosting(port, playerName, null);
+    }
+
+    /**
+     * 开始主持游戏（创建房间），带进度回调。
+     *
+     * @param port Minecraft 服务器端口
+     * @param playerName 玩家名称
+     * @param progressCallback 进度回调（0.0 - 1.0），可为 null
+     * @return 包含房间代码的 CompletableFuture
+     */
+    public static CompletableFuture<String> startHosting(int port, String playerName, Consumer<Double> progressCallback) {
         LOGGER.info("Starting hosting for {} on port {}", playerName, port);
         currentState = State.HOSTING_STARTING;
         return CompletableFuture.supplyAsync(() -> {
             try {
                 EasyTierManager manager = EasyTierManager.getInstance();
                 
-                
+                // 检查是否初始化
                 if (!manager.isInitialized()) {
-                    manager.initialize().join();
+                    manager.initialize(progressCallback).join();
                 }
                 
                 manager.stop();

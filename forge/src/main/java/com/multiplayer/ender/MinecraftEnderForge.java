@@ -26,6 +26,7 @@ public class MinecraftEnderForge {
      * 构造函数。
      * 注册配置和事件监听器。
      */
+    @SuppressWarnings("removal")
     public MinecraftEnderForge() {
         IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
 

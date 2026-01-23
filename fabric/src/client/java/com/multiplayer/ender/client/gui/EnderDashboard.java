@@ -185,7 +185,7 @@ public class EnderDashboard extends EnderBaseScreen {
             }
         }
 
-        if (!wasConnected) {
+        if (!wasConnected || (wasConnected && lastStateJson == null)) {
             checkStateImmediately();
         }
 
@@ -564,7 +564,7 @@ public class EnderDashboard extends EnderBaseScreen {
             }
             boolean isConnected = "host-ok".equals(state) || "guest-ok".equals(state);
 
-            boolean needsInit = wasConnected != isConnected || this.isUiConnected != isConnected;
+            boolean needsInit = wasConnected != isConnected || this.isUiConnected != isConnected || (isConnected && lastStateJson == null);
             if (isConnected) {
                 lastStateJson = json;
                 if (this.client != null) {

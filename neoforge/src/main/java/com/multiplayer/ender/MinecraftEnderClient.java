@@ -2,16 +2,13 @@ package com.multiplayer.ender;
 
 import net.minecraft.client.Minecraft;
 import net.neoforged.api.distmarker.Dist;
-import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.ModContainer;
-import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 import net.neoforged.neoforge.client.gui.ConfigurationScreen;
 import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
 
 @Mod(value = MinecraftEnder.MODID, dist = Dist.CLIENT)
-@EventBusSubscriber(modid = MinecraftEnder.MODID, value = Dist.CLIENT, bus = EventBusSubscriber.Bus.MOD)
 /**
  * 客户端专用的 Mod 入口类。
  * <p>
@@ -27,6 +24,8 @@ public class MinecraftEnderClient {
      */
     public MinecraftEnderClient(ModContainer container) {
         container.registerExtensionPoint(IConfigScreenFactory.class, ConfigurationScreen::new);
+        // 手动注册客户端设置事件监听器，替代 @EventBusSubscriber 以消除过时警告
+        container.getEventBus().addListener(MinecraftEnderClient::onClientSetup);
     }
 
     /**
@@ -35,7 +34,6 @@ public class MinecraftEnderClient {
      *
      * @param event 客户端设置事件
      */
-    @SubscribeEvent
     static void onClientSetup(FMLClientSetupEvent event) {
         MinecraftEnder.LOGGER.info("MinecraftEnder 客户端设置完成");
     }

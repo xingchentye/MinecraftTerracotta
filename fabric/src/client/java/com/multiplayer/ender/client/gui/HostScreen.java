@@ -26,6 +26,7 @@ public class HostScreen extends EnderBaseScreen {
     private ButtonWidget startBtn;
     private long lastStateCheck = 0;
     private long lastClickTime = 0;
+    private volatile double downloadProgress = -1.0;
     private static final Gson GSON = new Gson();
 
     public HostScreen(Screen parent) {
@@ -69,7 +70,10 @@ public class HostScreen extends EnderBaseScreen {
         }
         String playerName = this.client != null && this.client.getSession() != null ? this.client.getSession().getUsername() : "Player";
 
-        EnderApiClient.startHosting(port, playerName).thenAccept(roomCode -> {
+        EnderApiClient.startHosting(port, playerName, (p) -> {
+            this.downloadProgress = p;
+        }).thenAccept(roomCode -> {
+            this.downloadProgress = -1.0;
             if (roomCode != null && !roomCode.isEmpty()) {
                 statusText = Text.translatable("ender.host.status.success");
                 this.roomCode = roomCode;
@@ -150,6 +154,18 @@ public class HostScreen extends EnderBaseScreen {
         if (!roomCode.isEmpty()) {
             context.drawCenteredTextWithShadow(this.textRenderer, Text.translatable("ender.host.invite_code_prefix").append(roomCode), this.width / 2, textY + 20, 0x55FF55);
             context.drawCenteredTextWithShadow(this.textRenderer, Text.translatable("ender.host.share_hint"), this.width / 2, textY + 35, 0xAAAAAA);
+        }
+
+        if (downloadProgress >= 0) {
+            int barWidth = 200;
+            int barHeight = 4;
+            int barX = this.width / 2 - barWidth / 2;
+            int barY = textY + 40;
+
+            context.fill(barX, barY, barX + barWidth, barY + barHeight, 0xFF555555);
+            context.fill(barX, barY, barX + (int) (barWidth * downloadProgress), barY + barHeight, 0xFF55FF55);
+            
+            context.drawCenteredTextWithShadow(this.textRenderer, Text.literal((int)(downloadProgress * 100) + "%"), this.width / 2, barY + 8, 0xFFFFFF);
         }
     }
 }
