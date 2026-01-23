@@ -55,6 +55,7 @@ public class InGameMenuHandler {
             int x = width - buttonWidth - 5;
             int y = 5;
 
+            // 预先创建按钮，初始可见性由 RoomStateWidget 接管
             Button infoBtn = Button.builder(Component.literal(showInfoOverlay ? "隐藏信息" : "显示信息"), button -> {
                 showInfoOverlay = !showInfoOverlay;
                 button.setMessage(Component.literal(showInfoOverlay ? "隐藏信息" : "显示信息"));
@@ -83,7 +84,12 @@ public class InGameMenuHandler {
                     mc.setScreen(new StartupScreen(screen, () -> {
                         mc.setScreen(screen);
                         String playerName = mc.getUser().getName();
-                        EnderApiClient.startHosting(0, playerName);
+                        // 确保使用正确端口
+                        int port = 25565;
+                        if (mc.getSingleplayerServer() != null) {
+                            port = mc.getSingleplayerServer().getPort();
+                        }
+                        EnderApiClient.startHosting(port, playerName);
                     }));
                 } else {
                     button.active = false;
@@ -98,12 +104,20 @@ public class InGameMenuHandler {
                                     mc.setScreen(new StartupScreen(screen, () -> {
                                         mc.setScreen(screen);
                                         String playerName = mc.getUser().getName();
-                                        EnderApiClient.startHosting(0, playerName);
+                                        int port = 25565;
+                                        if (mc.getSingleplayerServer() != null) {
+                                            port = mc.getSingleplayerServer().getPort();
+                                        }
+                                        EnderApiClient.startHosting(port, playerName);
                                     }));
                                 });
                             } else {
                                 String playerName = mc.getUser().getName();
-                                EnderApiClient.startHosting(0, playerName);
+                                int port = 25565;
+                                if (mc.getSingleplayerServer() != null) {
+                                    port = mc.getSingleplayerServer().getPort();
+                                }
+                                EnderApiClient.startHosting(port, playerName);
                                 mc.execute(() -> {
                                     button.setMessage(Component.literal("请求中..."));
                                     button.active = false;
@@ -115,7 +129,10 @@ public class InGameMenuHandler {
             createRoomBtn.visible = false;
             event.addListener(createRoomBtn);
 
-            event.addListener(new RoomStateWidget(0, 0, width, height, infoBtn, settingsBtn, createRoomBtn, Minecraft.getInstance().font));
+            // 立即触发一次状态更新，避免按钮闪烁或消失
+            RoomStateWidget stateWidget = new RoomStateWidget(0, 0, width, height, infoBtn, settingsBtn, createRoomBtn, Minecraft.getInstance().font);
+            event.addListener(stateWidget);
+            stateWidget.forceUpdate(); // 新增：强制立即更新状态
         }
     }
 
@@ -138,6 +155,14 @@ public class InGameMenuHandler {
             this.createRoomBtn = createRoomBtn;
             this.font = font;
             this.lastCheck = System.currentTimeMillis() - 2000; 
+        }
+
+        /**
+         * 强制立即执行一次状态更新。
+         */
+        public void forceUpdate() {
+            this.lastCheck = System.currentTimeMillis();
+            updateState();
         }
 
         @Override
