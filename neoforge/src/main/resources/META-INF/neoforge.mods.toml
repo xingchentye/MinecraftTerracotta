@@ -4,7 +4,7 @@ license="AGPL-3.0"
 
 [[mods]]
 modId="ender_online"
-version="0.1.1"
+version="0.1.2"
 displayName="EnderOnline"
 authors="xingchentye"
 description='''
@@ -24,5 +24,4 @@ type="required"
 versionRange="[1.21,1.22)"
 ordering="NONE"
 side="BOTH"
-
 
